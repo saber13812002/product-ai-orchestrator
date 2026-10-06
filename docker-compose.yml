@@ -13,7 +13,10 @@ services:
   agno-agentos:
     build: .
     image: ai-product-orchestrator:latest
-    container_name: agno-agentos
+    # Overridable (default agno-agentos) so a second instance / a test can run
+    # alongside without a name collision. `docker compose exec agno-agentos ...`
+    # still works because it resolves by SERVICE name, not container name.
+    container_name: ${CONTAINER_NAME:-agno-agentos}
     restart: unless-stopped
     ports:
       - "${PORT:-7777}:7777"
