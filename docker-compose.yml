@@ -1,0 +1,41 @@
+# AI Product Orchestrator — Docker Compose
+#
+#   cp .env.example .env   # then fill in your LiteLLM gateway + key
+#   docker compose up -d
+#
+# One service. The code is baked into the image; all mutable state lives in the
+# `agentos-data` volume (SQLite + pipeline runs + the rendered document bundle),
+# so a clean server has no host-directory ownership issues and updates are just
+# `git pull && docker compose build && docker compose up -d`.
+name: ai-product-orchestrator
+
+services:
+  agno-agentos:
+    build: .
+    image: ai-product-orchestrator:latest
+    container_name: agno-agentos
+    restart: unless-stopped
+    ports:
+      - "${PORT:-7777}:7777"
+    # All variables (LITELLM_BASE_URL, LITELLM_API_KEY, AGENT_MODEL_*, ...) come
+    # from the user's .env. The block below DERIVES the AgentOS personal-agent
+    # vars from the canonical ones so a single .env drives both the HTTP API and
+    # the pipeline; environment wins over env_file for any name it also sets.
+    env_file:
+      - .env
+    environment:
+      OPENAI_BASE_URL: ${LITELLM_BASE_URL:-}
+      OPENAI_API_KEY: ${LITELLM_API_KEY:-}
+      AGENT_MODEL_ID: ${AGENT_MODEL_FAST:-qwen38-nothinking}
+      # Persist everything in the (appuser-owned) named volume, not the image layer.
+      DATA_DIR: /data
+      WORKFLOW_RUNS_DIR: /data/runs
+      WORKFLOW_DOCUMENTS_DIR: /data/documents
+    volumes:
+      - agentos-data:/data
+      # OPTIONAL: mount host-side storage instead of the named volume, for direct
+      # inspection / off-box backup. Comment out the volume line above first.
+      # - ./workflow/storage:/data
+
+volumes:
+  agentos-data:
