@@ -1,0 +1,31 @@
+# --- Secrets — NEVER commit these (6.3). The repo ships .env.example, not .env. ---
+.env
+.env.*
+*.env
+!*.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+uv.lock.bak
+
+# --- Local state & artifacts (persisted at runtime in the named volume) ---
+workflow/storage/
+storage/
+*.log
+agent.db
+agent.db-wal
+agent.db-shm
+data/
+
+# --- Editor / OS ---
+.DS_Store
+.idea/
+.vscode/

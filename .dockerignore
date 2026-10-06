@@ -1,0 +1,34 @@
+# Keep the Docker build context lean and leak-free.
+#
+# Secrets & local config — never bake into the image (6.3).
+.env
+.env.*
+*.env
+
+# Local state & artifacts (persisted via the named volume at runtime, not the image).
+workflow/storage/
+storage/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+agent.db
+agent.db-wal
+agent.db-shm
+data/
+
+# Venvs / build cruft.
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# VCS & editor.
+.git/
+.gitignore
+.DS_Store
+
+# Logs.
+*.log
+server_test.log
