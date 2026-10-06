@@ -7,6 +7,26 @@ specialized technical documents** a development team can build from — all thro
 
 Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
+## Status
+
+| | |
+|---|---|
+| 🚀 **Deployment Guide** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+| 🧪 **CI** | Hermetic tests run automatically on every push & merge request — **no LLM, no API key, no cost** ([`.gitlab-ci.yml`](.gitlab-ci.yml) / [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) |
+| 📦 **Latest Release** | `v0.1.0` (Semantic Versioning — see [docs/RELEASES.md](docs/RELEASES.md)) |
+| 🏛️ **Architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 🛠️ **Developing** | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
+
+> **CI:** the pipeline builds the locked Python environment, syntax-checks the package, and runs
+> the hermetic test suite (20 tests) with **no model and no network to LiteLLM**.
+>
+> Once the repo is pushed to a host, add a badge (placeholder below):
+>
+> ```
+> [![](https://gitlab.com/<you>/ai-product-orchestrator/-/badges/main/pipeline.svg)](https://gitlab.com/<you>/ai-product-orchestrator/-/commits/main)
+> [![](https://img.shields.io/badge/release-v0.1.0-brightgreen)](https://github.com/<you>/ai-product-orchestrator/tags)
+> ```
+
 ---
 
 > ## 🚀 Quick Start
@@ -31,6 +51,8 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 - 🏛️ **Architecture** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - ⚙️ **Configuration** — [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 - 🤖 **Agent Design** — [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md)
+- 🛠️ **Developer Workflow** — [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- 📦 **Releases** — [docs/RELEASES.md](docs/RELEASES.md)
 
 ## Project Overview
 
@@ -159,6 +181,10 @@ ai-product-orchestrator/
 ├── Dockerfile
 ├── .env.example
 ├── .gitignore
+├── .dockerignore
+├── .gitlab-ci.yml             # GitLab CI (hermetic tests)
+├── .github/workflows/ci.yml   # GitHub Actions (same scripts/ci.sh)
+├── conftest.py                # pytest bootstrap (makes `workflow` importable)
 ├── LICENSE
 ├── personal_agent.py          # AgentOS HTTP entrypoint (:7777)
 ├── pyproject.toml / uv.lock   # Python 3.13 + agno[os,sqlite]
@@ -174,9 +200,9 @@ ai-product-orchestrator/
 │   ├── agents/                # Manager, ProductAnalyst, 8 enrichment, DocumentManager
 │   ├── tests/                 # hermetic test suites
 │   └── storage/               # runs + documents (gitignored, volume-mounted)
-├── docs/                      # ARCHITECTURE / DEPLOYMENT / CONFIGURATION / AGENT_DESIGN
-├── scripts/                   # install.sh / start.sh / healthcheck.sh
-└── tests/                     # see workflow/tests (run in-container)
+├── docs/                      # ARCHITECTURE / DEPLOYMENT / CONFIGURATION / AGENT_DESIGN / DEVELOPMENT / RELEASES
+├── scripts/                   # install.sh / start.sh / healthcheck.sh / ci.sh
+└── tests/                     # README pointing at workflow/tests (run in-container)
 ```
 
 ## Tests

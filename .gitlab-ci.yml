@@ -1,0 +1,25 @@
+# GitLab CI — hermetic test pipeline (no LLM / LiteLLM / API key required).
+#
+# Runs `scripts/ci.sh` (build env from lockfile → syntax check → hermetic tests).
+# The same script is used by GitHub Actions, so the logic is defined once.
+image: python:3.13-slim
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+
+variables:
+  UV_LINK_MODE: copy
+  PIP_NO_CACHE_DIR: "1"
+  UV_PYTHON: "3.13"
+
+stages: [test]
+
+hermetic-tests:
+  stage: test
+  before_script:
+    - python -m pip install --quiet uv
+  script:
+    - bash scripts/ci.sh

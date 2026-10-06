@@ -1,0 +1,26 @@
+name: CI
+
+# Hermetic test pipeline — no LLM, no LiteLLM, no API key, no cost. Runs on
+# GitHub-hosted runners (no self-hosted runner setup required).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  hermetic-tests:
+    name: Hermetic tests (no LLM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          python-version: "3.13"
+
+      - name: Run CI (env from lockfile + syntax check + hermetic tests)
+        run: bash scripts/ci.sh
