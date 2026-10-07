@@ -8,12 +8,12 @@
 #   └─ deploy : sync to the persistent stack dir + `docker compose up -d --build`
 #              + health-wait — scripts/deploy-repo.sh
 #
-# NOTE on runner/tag: the self-hosted runner is a *project* runner registered
-# for THIS repo (auth token, tag set server-side). The jobs are left UNTAGGED
-# and the runner is configured with `run_untagged_jobs = true`, so any runner
-# available to this project picks up the jobs — no fragile tag matching. (A
-# project runner can only see this project's jobs, so this stays safe even on
-# a shared runner.)
+# NOTE on runner/tag: this project is served by runners that are all tagged
+# `server52` (the project runner #5 registered for this repo, plus the group
+# runner #1 that also lists this project). Every job is therefore tagged
+# `server52` so it matches those runners via ordinary tag matching — no
+# dependence on `run_untagged_jobs`, which is the setting that was leaving
+# the previous (untagged) pipelines stranded in "pending".
 # =============================================================================
 
 workflow:
@@ -31,6 +31,7 @@ stages: [test, deploy]
 test:
   stage: test
   timeout: 30m
+  tags: [server52]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
@@ -46,6 +47,7 @@ test:
 deploy:
   stage: deploy
   timeout: 45m
+  tags: [server52]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
