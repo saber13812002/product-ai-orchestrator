@@ -11,21 +11,18 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
 | | |
 |---|---|
+| 🔵 **CI (server52 runner)** | [![pipeline](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/badges/main/pipeline.svg)](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/commits/main) — hermetic tests on every push/MR/tag: **no LLM, no API key, no cost** |
 | 🚀 **Deployment Guide** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| 🧪 **CI** | Hermetic tests run automatically on every push & merge request — **no LLM, no API key, no cost** ([`.gitlab-ci.yml`](.gitlab-ci.yml) / [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) |
-| 📦 **Latest Release** | `v0.1.0` (Semantic Versioning — see [docs/RELEASES.md](docs/RELEASES.md)) |
+| 📦 **Latest Release** | [`v0.1.0`](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/tags) (Semantic Versioning — see [docs/RELEASES.md](docs/RELEASES.md)) |
 | 🏛️ **Architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 🛠️ **Developing** | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
+| 🏠 **Repository** | <https://git.ai.ismc.ir/common/website/ai-product-orchestrator> |
 
-> **CI:** the pipeline builds the locked Python environment, syntax-checks the package, and runs
-> the hermetic test suite (20 tests) with **no model and no network to LiteLLM**.
->
-> Once the repo is pushed to a host, add a badge (placeholder below):
->
-> ```
-> [![](https://gitlab.com/<you>/ai-product-orchestrator/-/badges/main/pipeline.svg)](https://gitlab.com/<you>/ai-product-orchestrator/-/commits/main)
-> [![](https://img.shields.io/badge/release-v0.1.0-brightgreen)](https://github.com/<you>/ai-product-orchestrator/tags)
-> ```
+> **CI:** the pipeline (on the self-hosted `server52` runner) builds the locked Python
+> environment in a container, syntax-checks the package, and runs the hermetic test suite
+> (20 tests) with **no model and no network to LiteLLM** — then deploys `main` to the server.
+> The same `scripts/ci.sh` body is also wired for GitHub Actions (`.github/workflows/ci.yml`)
+> if the repo is ever mirrored there.
 
 ---
 
@@ -35,7 +32,7 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 > <details><summary>TL;DR</summary>
 >
 > ```bash
-> git clone <repo-url> ai-product-orchestrator
+> git clone https://git.ai.ismc.ir/common/website/ai-product-orchestrator.git ai-product-orchestrator
 > cd ai-product-orchestrator
 > cp .env.example .env      # then fill in LITELLM_BASE_URL + LITELLM_API_KEY
 > docker compose up -d
@@ -133,7 +130,7 @@ Documents
 ## Quick Start
 
 ```bash
-git clone <repo-url> ai-product-orchestrator
+git clone https://git.ai.ismc.ir/common/website/ai-product-orchestrator.git ai-product-orchestrator
 cd ai-product-orchestrator
 
 cp .env.example .env          # then fill in LITELLM_BASE_URL, LITELLM_API_KEY, AGENT_MODEL_*
@@ -182,8 +179,9 @@ ai-product-orchestrator/
 ├── .env.example
 ├── .gitignore
 ├── .dockerignore
-├── .gitlab-ci.yml             # GitLab CI (hermetic tests)
-├── .github/workflows/ci.yml   # GitHub Actions (same scripts/ci.sh)
+├── .gitattributes           # force LF for *.sh/*.py/*.yml (Linux/Docker-safe)
+├── .gitlab-ci.yml             # GitLab CI on the server52 shell runner (test → deploy)
+├── .github/workflows/ci.yml   # GitHub Actions (same scripts/ci.sh) if mirrored there
 ├── conftest.py                # pytest bootstrap (makes `workflow` importable)
 ├── LICENSE
 ├── personal_agent.py          # AgentOS HTTP entrypoint (:7777)
@@ -201,7 +199,7 @@ ai-product-orchestrator/
 │   ├── tests/                 # hermetic test suites
 │   └── storage/               # runs + documents (gitignored, volume-mounted)
 ├── docs/                      # ARCHITECTURE / DEPLOYMENT / CONFIGURATION / AGENT_DESIGN / DEVELOPMENT / RELEASES
-├── scripts/                   # install.sh / start.sh / healthcheck.sh / ci.sh
+├── scripts/                   # install.sh / start.sh / healthcheck.sh / ci.sh / ci-docker.sh / deploy-repo.sh
 └── tests/                     # README pointing at workflow/tests (run in-container)
 ```
 

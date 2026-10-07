@@ -1,0 +1,30 @@
+# Force LF line endings in the repo and on every checkout/export, on ALL
+# platforms. This is a Linux/Docker-targeted project: shell scripts, Python,
+# and YAML must ship as LF so `set -euo pipefail`, shebangs, and `docker
+# build` work. `eol=lf` overrides any local `core.autocrlf` (e.g. Windows)
+# so git checkout / git archive never reintroduce CRLF.
+* text=auto eol=lf
+
+# Explicit, no ambiguity for the files that break if they get CRLF:
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.conf  text eol=lf
+*.ini   text eol=lf
+*.md    text eol=lf
+Dockerfile text eol=lf
+.gitlab-ci.yml text eol=lf
+
+# Binary files — never touch:
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.db    binary
+*.sqlite binary
+*.woff  binary
+*.woff2 binary

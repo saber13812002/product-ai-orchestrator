@@ -8,7 +8,7 @@ How to clone, set up, test, branch, commit, push, and release this project.
 ## 1. Clone
 
 ```bash
-git clone <repo-url> ai-product-orchestrator
+git clone https://git.ai.ismc.ir/common/website/ai-product-orchestrator.git ai-product-orchestrator
 cd ai-product-orchestrator
 ```
 
@@ -99,7 +99,28 @@ See [RELEASES.md](RELEASES.md) for the full flow. Short form:
 2. Push the tag: `git push origin v0.1.1`
 3. CI runs the hermetic tests on the tag; the release is created.
 
-## 8. Local run (without Docker)
+## 8. CI/CD (on the `server52` runner)
+
+The GitLab pipeline (`.gitlab-ci.yml`) runs on the **self-hosted shell runner** (tag
+`server52`), which **ignores Docker `image:`** — so the jobs shell out to containers
+themselves:
+
+| Job | What it does | Script |
+|---|---|---|
+| `test` | Hermetic tests in a throwaway `python:3.13-slim` container (no LLM/key/cost) | `scripts/ci-docker.sh` → `scripts/ci.sh` |
+| `deploy` | Sync to the persistent stack dir + `docker compose up -d --build` + health-wait | `scripts/deploy-repo.sh` |
+
+- **Trigger:** every push to `main`, every `v*` tag, every merge request, and manual
+  *Run pipeline*. `deploy` is **skipped for merge requests** (never deploy from an MR).
+- **Pipeline / badge:**
+  <https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/pipelines>
+- **GitHub Actions** (`.github/workflows/ci.yml`) runs the same `scripts/ci.sh` if the repo
+  is ever mirrored to GitHub.
+- The deploy target on server 52 is `/home/saber/saberprojects/ai-product-orchestrator`
+  (override via `DEPLOY_DIR`); its `.env` is guarded across redeploy so live keys/ports
+  survive.
+
+## 9. Local run (without Docker)
 
 ```bash
 cp .env.example .env          # fill LITELLM_BASE_URL + LITELLM_API_KEY (+ AGENT_MODEL_*)
