@@ -99,11 +99,10 @@ See [RELEASES.md](RELEASES.md) for the full flow. Short form:
 2. Push the tag: `git push origin v0.1.1`
 3. CI runs the hermetic tests on the tag; the release is created.
 
-## 8. CI/CD (on the `server52` runner)
+## 8. CI/CD (on the `server52` runners, server 52)
 
-The GitLab pipeline (`.gitlab-ci.yml`) runs on the **self-hosted shell runner** (tag
-`server52`), which **ignores Docker `image:`** — so the jobs shell out to containers
-themselves:
+The GitLab pipeline (`.gitlab-ci.yml`) runs on **self-hosted `shell` runners tagged `server52`**,
+which **ignore Docker `image:`** — so the jobs shell out to containers themselves:
 
 | Job | What it does | Script |
 |---|---|---|
@@ -117,8 +116,42 @@ themselves:
 - **GitHub Actions** (`.github/workflows/ci.yml`) runs the same `scripts/ci.sh` if the repo
   is ever mirrored to GitHub.
 - The deploy target on server 52 is `/home/saber/saberprojects/ai-product-orchestrator`
-  (override via `DEPLOY_DIR`); its `.env` is guarded across redeploy so live keys/ports
-  survive.
+  (override via `DEPLOY_DIR`, container `agno-agentos-repo`, port **7779**); its `.env` is
+  guarded across redeploy so live keys/ports survive.
+
+### The runners
+
+Two `shell` runners serve this project, both tagged `server52`:
+
+| Runner | ID | Owner / mode | Config |
+|---|---|---|---|
+| `AI-TOOLS` | #1 | root, systemd (`gitlab-runner` service) | `/etc/gitlab-runner/config.toml` |
+| `aio-server52` | #5 | `saber`, user-mode (detached process) | `/home/saber/gitlab-runner-aio/config.toml` (log: `runner.log`) |
+
+**Gotcha — `clone_url` (fixed 2026-10-07):** GitLab's `external_url` is the public
+`https://git.ai.ismc.ir` (:443), which **server 52 itself cannot reach** (the hostname
+resolves to a public IP from 52). Runners without `clone_url` fall back to that public
+address and **every job dies in `Getting source`** with
+`Failed to connect to git.ai.ismc.ir port 443`. Each runner's `[[runners]]` block therefore
+needs:
+
+```toml
+  url       = "http://172.20.1.52:81"
+  clone_url = "http://172.20.1.52:81"
+```
+
+after which `sudo gitlab-runner verify` / `gitlab-runner verify` and (for the systemd runner)
+`sudo systemctl restart gitlab-runner`. Fixed on runner #5; if a new job fails with the
+port-443 error, check whether it landed on a runner that still lacks `clone_url`.
+
+**Reboot note:** runner #5 is user-mode (no sudo available → no systemd unit). After a 52
+reboot, relaunch it with:
+
+```bash
+setsid nohup /usr/local/bin/gitlab-runner run \
+  --config /home/saber/gitlab-runner-aio/config.toml \
+  > /home/saber/gitlab-runner-aio/runner.log 2>&1 &
+```
 
 ## 9. Local run (without Docker)
 

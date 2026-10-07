@@ -44,6 +44,7 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
 ## 📌 Documentation
 
+- 🤖 **AGENTS.md** — orientation for AI coding agents (commands, CI/CD gotchas, hard rules)
 - 🚀 **Deployment Guide** — [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - 🏛️ **Architecture** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - ⚙️ **Configuration** — [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
@@ -174,6 +175,7 @@ No secrets live in the repo. Full reference: [docs/CONFIGURATION.md](docs/CONFIG
 ```
 ai-product-orchestrator/
 ├── README.md
+├── AGENTS.md                  # agent/developer orientation + CI/CD gotchas
 ├── docker-compose.yml
 ├── Dockerfile
 ├── .env.example
