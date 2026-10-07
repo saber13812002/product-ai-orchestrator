@@ -8,9 +8,12 @@
 #   └─ deploy : sync to the persistent stack dir + `docker compose up -d --build`
 #              + health-wait — scripts/deploy-repo.sh
 #
-# NOTE: the self-hosted runner uses the `shell` executor, so a Docker `image:`
-# would be IGNORED. Instead `test` shells out to a container itself. See
-# docs/GITLAB-CI.md and docs/DEVELOPMENT.md.
+# NOTE on runner/tag: the self-hosted runner is a *project* runner registered
+# for THIS repo (auth token, tag set server-side). The jobs are left UNTAGGED
+# and the runner is configured with `run_untagged_jobs = true`, so any runner
+# available to this project picks up the jobs — no fragile tag matching. (A
+# project runner can only see this project's jobs, so this stays safe even on
+# a shared runner.)
 # =============================================================================
 
 workflow:
@@ -27,7 +30,6 @@ stages: [test, deploy]
 # launched by the shell runner (the runner itself has docker).
 test:
   stage: test
-  tags: [server52]
   timeout: 30m
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -43,7 +45,6 @@ test:
 # and manual "Run pipeline".
 deploy:
   stage: deploy
-  tags: [server52]
   timeout: 45m
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
