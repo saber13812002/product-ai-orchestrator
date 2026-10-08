@@ -44,9 +44,10 @@ uv run --with pytest python -m pytest workflow/tests -q
 # ...or one suite:
 uv run python -m workflow.tests.test_full_pipeline
 uv run python -m workflow.tests.test_enrichment
+uv run python -m workflow.tests.test_refine
 ```
 
-Expected: **20 passed**. This is exactly what CI runs (see [scripts/ci.sh](../scripts/ci.sh)).
+Expected: **21 passed**. This is exactly what CI runs (see [scripts/ci.sh](../scripts/ci.sh)).
 
 ## 4. Create a branch
 

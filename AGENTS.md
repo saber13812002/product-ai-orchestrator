@@ -26,7 +26,7 @@ All LLM calls go through **one LiteLLM gateway** (default `http://172.20.1.52:40
 
 ```bash
 # Hermetic tests — NO LLM, NO LiteLLM, NO API key. Must always pass; this is what CI runs.
-uv run --with pytest python -m pytest workflow/tests -q        # expected: 20 passed
+uv run --with pytest python -m pytest workflow/tests -q        # expected: 21 passed
 
 # Or, exactly as CI runs it (throwaway python:3.13-slim container):
 bash scripts/ci-docker.sh
@@ -38,6 +38,10 @@ uv run personal_agent.py                                      # AgentOS HTTP on 
 # Run a pipeline in the live container (on 52):
 docker compose exec agno-agentos uv run python -m workflow.run full  --brief "..."
 docker compose exec agno-agentos uv run python -m workflow.run enrich --brief "..."
+docker compose exec agno-agentos uv run python -m workflow.run refine --brief "..."
+#   `refine` = `enrich` + a targeted 2nd pass that re-runs only the doc-completeness
+#   gate's gapful documents (DDL / OpenAPI / payment / observability / ...) to lift
+#   completeness. It uses a larger budget (config.REFINE_TOKEN_BUDGET) by default.
 ```
 
 ## Hard rules (do not break these)

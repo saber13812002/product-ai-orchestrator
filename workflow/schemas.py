@@ -414,6 +414,15 @@ class WorkflowState(BaseModel):
     document_completeness: Optional[dict[str, Any]] = None
     documents_dir: str = ""   # absolute path of /documents/{run_id}/ once written
 
+    # -- STEP 8: gap-filling refine pass ------------------------------------ #
+    # The subset of documents re-run by the 2nd (refine) pass, plus a small
+    # before/after report of the completeness gate (which overall the refine
+    # pass lifted it from and to). `technical_documents` is left as the 1st-pass
+    # output; `document_completeness` is OVERWRITTEN with the post-refine gate
+    # so downstream consumers see the final score.
+    refined_documents: list[dict[str, Any]] = Field(default_factory=list)
+    refinement_report: Optional[dict[str, Any]] = None
+
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     errors: list[str] = Field(default_factory=list)
 

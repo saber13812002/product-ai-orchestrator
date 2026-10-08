@@ -84,6 +84,8 @@ def _print_full(state) -> None:
             "document_types": [d.get("document_type") for d in state.technical_documents],
             "documents_dir": state.documents_dir or None,
             "completeness": state.document_completeness,
+            # STEP 8 — the gap-filling refine pass (present only in refine mode).
+            "refinement": state.refinement_report,
         } if (state.technical_documents or state.document_completeness) else None,
         "budget": {
             "used_real_tokens": tu.real_total_tokens,
@@ -125,6 +127,20 @@ def main(argv: list[str] | None = None) -> int:
                           help="Design-loop iterations (default: "
                                "config.ENRICH_MAX_ITERATIONS)")
 
+    p_refine = sub.add_parser(
+        "refine",
+        help="STEP 8: enrich + a targeted gap-filling 2nd pass that re-runs the "
+             "doc-completeness gate's gapful documents (DDL / OpenAPI / payment / "
+             "reporting / UI flows / observability / ...) to lift completeness.",
+    )
+    p_refine.add_argument("--brief", required=True, help="Raw Product Brief")
+    p_refine.add_argument("--budget", type=int, default=None,
+                          help="Override the STEP 8 token budget "
+                               "(default: config.REFINE_TOKEN_BUDGET)")
+    p_refine.add_argument("--iterations", type=int, default=None,
+                          help="Design-loop iterations (default: "
+                               "config.ENRICH_MAX_ITERATIONS)")
+
     args = ap.parse_args(argv)
 
     if args.cmd == "routing":
@@ -148,6 +164,19 @@ def main(argv: list[str] | None = None) -> int:
         engine = Engine(
             test_mode=False,
             enrich=True,
+            budget=args.budget,
+            max_iterations=args.iterations,
+        )
+        state = engine.run(args.brief)
+        _print_full(state)
+        return 0 if state.status == "completed" else 1
+
+    if args.cmd == "refine":
+        # STEP 8: the enrich layer PLUS a targeted gap-filling 2nd pass (the
+        # Engine picks up the larger REFINE_TOKEN_BUDGET by default).
+        engine = Engine(
+            test_mode=False,
+            refine=True,
             budget=args.budget,
             max_iterations=args.iterations,
         )

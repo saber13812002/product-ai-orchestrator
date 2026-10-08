@@ -72,6 +72,7 @@ class Engine:
         threshold: Optional[int] = None,
         test_mode: Optional[bool] = None,
         enrich: bool = False,
+        refine: bool = False,
     ) -> None:
         self.test_mode = bool(test_mode) if test_mode is not None else config.TEST_MODE
         # STEP 5 — the enrichment run is a distinct profile: it runs the SAME
@@ -79,10 +80,19 @@ class Engine:
         # iterations) under a LARGER budget to fit the 8-document pass. When
         # `enrich` is set and no explicit budget/iterations are given, use the
         # STEP 5 knobs (they override the full-mode defaults only in that case).
-        self.enrich = bool(enrich)
-        budget_default = config.TEST_TOKEN_BUDGET if self.test_mode else (
-            config.ENRICH_TOKEN_BUDGET if self.enrich else config.FULL_TOKEN_BUDGET
-        )
+        #
+        # STEP 8 — `refine` implies `enrich` (it is the 1st enrichment pass PLUS
+        # a targeted 2nd gap-filling pass). A refine run uses the larger
+        # REFINE_TOKEN_BUDGET by default so there is headroom for the 2nd pass.
+        self.enrich = bool(enrich) or bool(refine)
+        self.refine = bool(refine)
+        if self.refine:
+            budget_default = config.REFINE_TOKEN_BUDGET
+        elif self.enrich:
+            budget_default = config.ENRICH_TOKEN_BUDGET
+        else:
+            budget_default = (config.TEST_TOKEN_BUDGET if self.test_mode
+                              else config.FULL_TOKEN_BUDGET)
         iter_default = config.TEST_MAX_ITERATIONS if self.test_mode else (
             config.ENRICH_MAX_ITERATIONS if self.enrich else config.FULL_MAX_ITERATIONS
         )
@@ -696,6 +706,216 @@ class Engine:
         return score_d
 
     # ===================================================================== #
+    # STEP 15 — gap-filling "refine" pass (STEP 8). A targeted 2nd enrichment
+    # pass on top of STEP 14. Fully additive and non-fatal: it re-runs only the
+    # documents the completeness gate flagged as gapful, injecting each agent's
+    # named gaps + its own v1 document so it FILLS the holes, then re-scores.
+    # ===================================================================== #
+    def _refine_targets(
+        self, comp: dict, docs: list[TechnicalDocument]
+    ) -> tuple[list[str], dict[str, list[str]]]:
+        """Decide WHICH enrichment agents to re-run and WHICH named gaps apply
+        to each.
+
+        Two complementary signals, merged:
+          1. The gate's NAMED gaps (prose) — each gap is keyword-mapped to the
+             agent(s) that own it (config.REFINE_GAP_KEYWORDS).
+          2. The gate's per-document completeness scores — the N lowest-scoring
+             documents are always widened into the target set, so a gap the gate
+             described in prose (or that maps to no keyword) still reaches the
+             weakest document.
+
+        Returns (ordered target agent names, {agent: [gaps]}). Target set is
+        capped at config.REFINE_MAX_AGENTS, lowest-scoring first.
+        """
+        dims = {k: _clamp01(comp.get(k)) for k in EnrichmentScore.DIMENSION_KEYS}
+        # doc_type -> agent name (from the config source of truth) + dim key.
+        type_to_agent = {spec["doc_type"]: spec["agent"] for spec in config.ENRICH_AGENTS}
+        # map each dim key to its doc_type (the dim names line up 1:1 with the
+        # 8 documents, so match by the dim's leading word).
+        dim_to_type = {
+            "backend_completeness": "Backend Design Document",
+            "database_completeness": "Database Design Document",
+            "api_completeness": "API Specification",
+            "frontend_completeness": "Frontend/UI Design Document",
+            "ux_completeness": "UX Specification",
+            "testing_completeness": "Testing Strategy",
+            "security_completeness": "Security Document",
+            "deployment_completeness": "Deployment Document",
+        }
+        # agent -> named gaps that keyword-map to it.
+        gaps_by_agent: dict[str, list[str]] = {}
+        for gap in comp.get("gaps", []) or []:
+            g = (gap or "").strip().lower()
+            if not g:
+                continue
+            for agent_name, keywords in config.REFINE_GAP_KEYWORDS.items():
+                if any(kw in g for kw in keywords):
+                    gaps_by_agent.setdefault(agent_name, [])
+                    if gap.strip() not in gaps_by_agent[agent_name]:
+                        gaps_by_agent[agent_name].append(gap.strip())
+                    break  # first (most-specific) owning agent wins per gap
+
+        # score each agent (via its document dim) — lowest first.
+        agent_score: dict[str, int] = {}
+        for dim_key, doc_type in dim_to_type.items():
+            agent = type_to_agent.get(doc_type)
+            if agent:
+                agent_score[agent] = dims.get(dim_key, 0)
+
+        # widen: pull in the lowest-scoring documents up to the cap, even if the
+        # gap list did not keyword-map to them (generic thinness → fill it).
+        ordered_by_score = sorted(agent_score.items(), key=lambda kv: kv[1])
+        targets: list[str] = list(gaps_by_agent.keys())
+        for agent, _score in ordered_by_score:
+            if len(targets) >= config.REFINE_MAX_AGENTS:
+                break
+            if agent not in targets:
+                targets.append(agent)
+        # cap hard (in case keyword mapping alone already exceeded the cap).
+        targets = targets[: config.REFINE_MAX_AGENTS]
+
+        # for each target, ensure it carries at least one gap to close (use the
+        # gate's named gap if present, else a generic "thin — add substance").
+        final_gaps: dict[str, list[str]] = {}
+        for agent in targets:
+            gaps = list(gaps_by_agent.get(agent, []))
+            if not gaps:
+                gaps = [f"{agent} document scored low — deepen the weak areas"]
+            final_gaps[agent] = gaps
+        return targets, final_gaps
+
+    def _refine_source(
+        self, s: WorkflowState, doc: TechnicalDocument
+    ) -> str:
+        """Input to one refine call: the overall design (kept whole) + the agent's
+        OWN v1 document (so it revises, not rewrites from scratch). The design
+        goes first so it is never the part that gets cut."""
+        design = s.design_versions[-1]["content"] if s.design_versions else ""
+        v1 = (doc.architecture or "")[: config.REFINE_SELF_DOC_CHARS]
+        v1_header = (
+            "=== YOUR CURRENT (v1) DOCUMENT — REVISE IT, DO NOT REWRITE ===\n"
+            f"summary: {doc.summary}\n"
+            f"decisions: {[d.decision for d in doc.decisions]}\n"
+            f"architecture:\n{v1}\n"
+        )
+        return _short(f"{design}\n\n{v1_header}", config.ENRICH_SOURCE_CHARS)
+
+    def _step15_refine(self, s: WorkflowState) -> None:
+        """STEP 8 — the targeted gap-filling 2nd enrichment pass.
+
+        Reads the 1st-pass completeness gate, picks the gapful documents, re-runs
+        those agents with their named gaps + v1 injected, merges the refined docs
+        back in, rewrites the 10-file bundle, and re-runs the completeness gate.
+        Non-fatal throughout: a budget hit or a failed agent just keeps the v1
+        document for that doc.
+        """
+        agents = self._enrich_agents()
+        docs = [TechnicalDocument(**d) for d in s.technical_documents]
+        comp = s.document_completeness or {}
+        before_overall = comp.get("overall_score", 0)
+
+        targets, gaps_by_agent = self._refine_targets(comp, docs)
+        if not targets:
+            return
+        s.current_step = "STEP15_refine"
+        save_state(s)
+
+        refined: list[TechnicalDocument] = []
+        doc_by_type = {d.document_type: d for d in docs}
+        for name in targets:
+            spec = next(sp for sp in config.ENRICH_AGENTS if sp["agent"] == name)
+            agent = agents[name]
+            v1 = doc_by_type.get(spec["doc_type"])
+            if v1 is None:
+                continue
+            source = self._refine_source(s, v1)
+            est = config.REFINE_DOC_MAX_OUTPUT + int(len(source) / config.CHARS_PER_TOKEN)
+            if not self._fits(s, est):
+                s.errors.append(f"refine stopped at {name}: budget "
+                                f"headroom {self._headroom(state=s)} < est {est}")
+                break
+            s.current_step = f"STEP15_refine_{name}"
+            save_state(s)
+            try:
+                doc = self._call(
+                    s, role=agent.role, agent=name, step="enrich_refine_doc",
+                    input_text=source, schema=TechnicalDocument,
+                    instructions=prompts.refine_prompt(
+                        agent.role_prompt, agent.doc_type,
+                        gaps_by_agent.get(name, [])),
+                    max_tokens=config.REFINE_DOC_MAX_OUTPUT,
+                )
+            except BudgetExhausted:
+                break
+            if not isinstance(doc, TechnicalDocument):
+                s.errors.append(f"refine_{name}: unusable output, kept v1")
+                continue
+            # keep traceability + pin the document_type (as the 1st pass does).
+            for d in doc.decisions:
+                if not d.source:
+                    d.source = name
+            doc.document_type = spec["doc_type"]
+            refined.append(doc)
+            save_state(s)
+
+        if not refined:
+            # nothing actually re-ran — record an (empty) report and move on.
+            s.refinement_report = {
+                "targets": targets, "re_refined": [],
+                "before_overall": before_overall, "after_overall": before_overall,
+            }
+            save_state(s)
+            return
+
+        # Merge refined docs back into the full set (replace same doc_type).
+        refined_types = {d.document_type for d in refined}
+        merged = [d for d in docs if d.document_type not in refined_types] + refined
+        s.technical_documents = [d.model_dump() for d in merged]
+        s.refined_documents = [d.model_dump() for d in refined]
+        save_state(s)
+
+        # Rewrite the 10-file bundle with the refined set (DocumentManager is
+        # deterministic; it overwrites the 1st-pass files in place).
+        fo = (s.final_result or {}).get("sections", {}) or {}
+        dm = DocumentManager(s.run_id)
+        try:
+            ddir = dm.write(
+                merged,
+                product_spec=fo.get("product_specification", ""),
+                system_architecture=fo.get("system_architecture", ""),
+            )
+            s.documents_dir = str(ddir)
+        except Exception as e:  # noqa: BLE001 - file writes must not fail the run
+            s.errors.append(f"refine document_manager write failed: {type(e).__name__}: {e}")
+
+        # Re-run the completeness gate on the refined set; OVERWRITE the
+        # completeness (downstream sees the final score). If budget is gone,
+        # keep the 1st-pass gate and note it.
+        s.current_step = "STEP15_refine_gate"
+        save_state(s)
+        gate_est = config.ENRICH_GATE_MAX_OUTPUT + int(
+            len(self._doc_gate_input(merged)) / config.CHARS_PER_TOKEN)
+        after_overall = before_overall
+        if self._fits(s, gate_est):
+            try:
+                after = self._run_doc_gate(s, merged)
+                after_overall = after.get("overall_score", before_overall)
+            except BudgetExhausted:
+                s.errors.append("refine gate skipped: budget exhausted (kept 1st-pass gate)")
+        else:
+            s.errors.append("refine gate skipped: insufficient budget headroom "
+                            "(kept 1st-pass gate)")
+        s.refinement_report = {
+            "targets": targets,
+            "re_refined": [d.document_type for d in refined],
+            "gaps_by_agent": gaps_by_agent,
+            "before_overall": before_overall,
+            "after_overall": after_overall,
+        }
+        save_state(s)
+
+    # ===================================================================== #
     # run()
     # ===================================================================== #
     def run(self, brief: str, run_id: Optional[str] = None) -> WorkflowState:
@@ -745,9 +965,26 @@ class Engine:
                     pass  # marked + persisted in _call; docs so far are kept
                 except Exception as e:  # noqa: BLE001
                     s.errors.append(f"enrichment (non-fatal): {type(e).__name__}: {e}")
+                # STEP 8 — the targeted gap-filling 2nd pass, on top of the 1st
+                # enrichment pass + its completeness gate. Non-fatal (a hiccup
+                # here keeps the 1st-pass documents; the primary deliverable is
+                # already complete). Only runs in `refine` mode.
+                if self.refine and s.technical_documents and s.document_completeness:
+                    try:
+                        self._step15_refine(s)
+                    except BudgetExhausted:
+                        pass  # refined docs so far are kept; 1st-pass docs remain
+                    except Exception as e:  # noqa: BLE001
+                        s.errors.append(
+                            f"refine (non-fatal): {type(e).__name__}: {e}")
                 if pre_status == "completed":
                     s.status = "completed"
-                    s.current_step = "completed_enriched" if s.technical_documents else "completed"
+                    if s.technical_documents:
+                        s.current_step = ("completed_refined"
+                                          if s.refined_documents
+                                          else "completed_enriched")
+                    else:
+                        s.current_step = "completed"
                 save_state(s)
         except BudgetExhausted:
             pass  # already marked + persisted in _call

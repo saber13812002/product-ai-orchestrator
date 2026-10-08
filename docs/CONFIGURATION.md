@@ -55,13 +55,14 @@ do not affect portability.
 
 | Group | Key knobs |
 |---|---|
-| **Budgets** | `TEST_TOKEN_BUDGET=20000`, `FULL_TOKEN_BUDGET=100000`, `ENRICH_TOKEN_BUDGET=160000`, `BUDGET_RESERVE=500`. |
+| **Budgets** | `TEST_TOKEN_BUDGET=20000`, `FULL_TOKEN_BUDGET=100000`, `ENRICH_TOKEN_BUDGET=160000`, `REFINE_TOKEN_BUDGET=210000`, `BUDGET_RESERVE=500`. |
 | **Iterations** | `TEST_MAX_ITERATIONS`, `FULL_MAX_ITERATIONS=2`, `ENRICH_MAX_ITERATIONS=1` — budget knobs, not quality bars. |
 | **Quality gate** | `GATE_THRESHOLD=85` (design), `ENRICH_GATE_THRESHOLD=80` (documents). |
 | **Quality weights** | `QUALITY_WEIGHTS` — 11 dimensions summing to 1.0; the final score is their weighted mean. |
 | **Critic** | `MAX_CRITIC_ISSUES=5`, `ACTIONABLE_SEVERITIES=("BLOCKER","HIGH")`. |
 | **Per-step output caps** | `STEP_MAX_OUTPUT_TEST` / `STEP_MAX_OUTPUT_FULL` — keep each step within budget. |
 | **Enrichment** | `ENRICH_AGENTS` (the 8 agent→doc→file map), `ENRICH_DOC_MAX_OUTPUT`, `ENRICH_SOURCE_CHARS`. |
+| **Refine pass (STEP 8)** | `REFINE_TOKEN_BUDGET=210000` (budget for the 2nd gap-filling pass), `REFINE_MAX_AGENTS=3` (how many docs to re-run), `REFINE_SELF_DOC_CHARS=8000` (how much of each agent's v1 doc it feeds back), `REFINE_DOC_MAX_OUTPUT=3000`, `REFINE_GAP_KEYWORDS` (per-gap → agent routing). |
 
 ## Choosing your model fleet
 

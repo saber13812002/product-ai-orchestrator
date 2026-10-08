@@ -39,6 +39,12 @@ deep, specialized technical documents** a development team can build from. It is
  Final Review → 17-section Deliverable                 Testing / Deployment)
                                                         → Document Manager → 10 .md
                                                         → Document-Completeness Gate
+                                                                │
+                                                        [REFINE (STEP 8, optional)]
+                                                        targeted 2nd pass: re-runs ONLY
+                                                        the gapful docs (gate's named
+                                                        gaps + their v1 doc injected)
+                                                        → bundle overwritten → gate re-run
 ```
 
 ## Components
@@ -46,8 +52,8 @@ deep, specialized technical documents** a development team can build from. It is
 | Layer | File(s) | Responsibility |
 |---|---|---|
 | **HTTP runtime** | `personal_agent.py` | AgentOS app on `:7777` (`/health`, `/docs`, `/agents`). Serves the `personal_agent` (a small assistant bound to the same LiteLLM gateway). |
-| **CLI** | `workflow/run.py` | `smoke` / `routing` / `full` / `enrich` subcommands — the way the pipeline is driven. |
-| **Orchestrator** | `workflow/engine.py` | The `Engine`: runs the 13-step pipeline + quality loop, then (if `enrich`) the STEP 14 enrichment layer. Enforces the token budget. |
+| **CLI** | `workflow/run.py` | `smoke` / `routing` / `full` / `enrich` / `refine` subcommands — the way the pipeline is driven. |
+| **Orchestrator** | `workflow/engine.py` | The `Engine`: runs the 13-step pipeline + quality loop, then (if `enrich`) the STEP 14 enrichment layer, then (if `refine`) the STEP 15 gap-filling pass. Enforces the token budget. |
 | **Router** | `workflow/router.py` | Maps a **logical role** (`fast`/`deep`/`alt`/`stub`) → a **real LiteLLM model** from `config.MODEL_ROLES`. Runs the call and records an **honest token ledger** (real model + tokens read back from run metrics; stubs flagged, never mixed into "real" totals). |
 | **Models** | `workflow/models.py` | Cached factory building Agno `OpenAIChat` objects bound to one LiteLLM model id. |
 | **Config** | `workflow/config.py` | Single source of truth: roles→models, budgets, quality weights, per-step output caps, enrichment knobs. |
@@ -96,6 +102,31 @@ markdown bundle (`product.md`, `architecture.md` + the 8 agent docs) plus `TRACE
 (every decision → source + reason). A **document-completeness gate** scores all 8 documents
 0–100; the overall is the engine-computed mean, compared to `ENRICH_GATE_THRESHOLD` (80).
 
+## Gap-filling refine pass (STEP 8)
+
+The `refine` run mode is the enrichment layer **plus one targeted 2nd pass** (STEP 15) that
+closes the specific gaps the completeness gate named in pass 1. It is purely additive and
+non-fatal — a hiccup keeps the pass-1 documents; the primary design is already complete.
+
+1. **Pick the targets.** The engine merges two signals from the pass-1 gate: (a) each **named
+   gap** is keyword-mapped to the owning agent(s) (`config.REFINE_GAP_KEYWORDS` — DDL→database,
+   OpenAPI→api, payment/reporting→backend, observability→devops, …); (b) the **N lowest-scoring**
+   documents are always widened in, so a prose-described gap still reaches its doc. The set is
+   capped at `config.REFINE_MAX_AGENTS` (default 3).
+2. **Re-run only those agents.** Each targeted agent is called with a *refine* prompt
+   (`prompts.refine_prompt`): the completeness gate's named gaps for its document **plus its own
+   v1 document** (so it revises and extends, not rewrites from scratch). Everything else — the
+   other 5 documents — is untouched.
+3. **Overwrite + re-score.** The refined documents replace their v1 counterparts in state, the
+   deterministic Document Manager **rewrites the 10-file bundle** in place, and the
+   document-completeness gate is **re-run** on the refined set. The engine records a before/after
+   `refinement_report` (which docs were re-run, the named gaps routed to each, and the overall
+   score before and after).
+
+The whole thing is one more bounded stretch of `fast`-role structured calls under a larger
+budget (`config.REFINE_TOKEN_BUDGET`). Baseline: pass-1 overall **79**; the refine pass targets
+**85+** by filling the DDL / OpenAPI / payment / reporting / UI-flow / observability holes.
+
 ## Multi-model routing (the portability core)
 
 No agent ever names a model. It asks the router for a **logical role**; the router resolves it
@@ -114,8 +145,8 @@ change to `.env` — no code change.**
 ## State & data
 
 - Every step persists `state.json` (product analysis, design versions, scores, final review,
-  the 8 technical documents, the completeness gate, and the token ledger) under
-  `storage/runs/{run_id}/`.
+  the 8 technical documents, the completeness gate, the STEP 8 refine report, and the token
+  ledger) under `storage/runs/{run_id}/`.
 - The rendered document bundle is written to `storage/documents/{run_id}/`.
 - In the container, both live under the `/data` named volume (`WORKFLOW_RUNS_DIR` /
   `WORKFLOW_DOCUMENTS_DIR`), so runs survive restarts and updates.

@@ -1,6 +1,6 @@
 [project]
 name = "agno-agentos"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.13"
 dependencies = [
     "agno[os,sqlite]>=3.1.1",

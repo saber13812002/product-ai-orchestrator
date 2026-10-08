@@ -380,3 +380,81 @@ ENRICH_GATE_THRESHOLD: int = 80
 ENRICH_TOKEN_BUDGET: int = 160000
 ENRICH_MAX_ITERATIONS: int = 1   # design-loop iterations: free budget for the docs
 
+# --------------------------------------------------------------------------- #
+# STEP 8 — Gap-filling "refine" pass (2nd enrichment pass)
+#
+# The `refine` run mode runs the SAME 13-step pipeline + the SAME first
+# enrichment pass, then — BEFORE the run ends — does one targeted 2nd pass that
+# re-runs only the enrichment agents the document-completeness gate flagged as
+# gapful (DDL / OpenAPI / payment / reporting / UI flows / observability / ...),
+# injecting each agent's named gaps + its own v1 document so it FILLS the holes
+# instead of rewriting from scratch. The refined documents replace the v1 ones,
+# the 10-file bundle is rewritten, and the doc-completeness gate is re-run. This
+# is purely additive on top of `enrich` and never touches the 13-step primary
+# pipeline. Measured live: pass-1 overall 79; the refine pass targets 85+.
+# --------------------------------------------------------------------------- #
+
+# Run budget for a `refine` run = the enrichment budget (design loop + 1st
+# document pass, ~156k) PLUS headroom for the 2nd targeted pass (up to
+# REFINE_MAX_AGENTS re-runs, each re-reading the source + emitting a full doc,
+# plus one more completeness gate). 210k keeps the ledger honest with room.
+REFINE_TOKEN_BUDGET: int = 210000
+
+# How many of the 8 documents the refine pass may re-run, at most. The gate
+# names specific gaps, but we also widen the target to the N lowest-scoring
+# documents (so a gap the gate describes in prose still reaches its doc).
+REFINE_MAX_AGENTS: int = 3
+
+# Characters of the targeted agent's OWN v1 document we feed back to it as the
+# "here is what you wrote, fill these holes" context. The v1 architecture body
+# is the centerpiece; a few thousand chars is plenty to preserve it and extend.
+REFINE_SELF_DOC_CHARS: int = 8000
+
+# Per-gap routing: keyword (lowercase) -> enrichment agent names. A named gap
+# from the gate is matched (FIRST match wins, so agents are ordered
+# most-specific-first) against these substrings. Keep the terms DISCRIMINATING
+# (not bare generic words like "table"/"log"/"service", which cross-match the
+# wrong agent). Covers the recurring STEP 5 gaps: DDL (database), exact OpenAPI
+# (api), payment/reporting (backend), UI flows (frontend+ux), observability
+# (devops+backend), test plans (test), threat model (security), DR/backup
+# (devops), caching/queue (backend).
+REFINE_GAP_KEYWORDS: dict[str, list[str]] = {
+    "database_architect": [
+        "ddl", "schema", "migration", "index", "erd", "partition", "constraint",
+        "primary key", "foreign key", "table definition",
+    ],
+    "api_architect": [
+        "openapi", "swagger", "endpoint", "api spec", "request/response",
+        "payload", "rate limit", "versioning",
+    ],
+    "frontend_architect": [
+        "ui flow", "user flow", "page flow", "component tree", "state management",
+        "routing", "responsive",
+    ],
+    "ux_designer": [
+        "wireframe", "user journey", "persona", "empty state", "error state",
+        "interaction", "usability",
+    ],
+    "test_architect": [
+        "test case", "test plan", "e2e", "unit test", "integration test",
+        "acceptance criterion", "test coverage",
+    ],
+    "devops_architect": [
+        "observability", "monitoring", "logging", "alerting", "tracing",
+        "disaster recovery", "rollback", "backup",
+    ],
+    "security_architect": [
+        "threat model", "owasp", "authz", "authn", "secret management",
+        "audit log", "encryption", "rbac", "vulnerability",
+    ],
+    "backend_architect": [
+        "payment", "billing", "reporting", "queue", "worker", "caching",
+        "service boundary", "domain model", "error handling",
+    ],
+}
+
+# Refine-pass per-document output cap: slightly larger than the first pass so
+# a gap-fill (e.g. a real DDL block or a 6-endpoint OpenAPI table) has room to
+# add substance without being truncated mid-document.
+REFINE_DOC_MAX_OUTPUT: int = 3000
+

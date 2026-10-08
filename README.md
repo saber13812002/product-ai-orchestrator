@@ -2,8 +2,10 @@
 
 A **multi-agent, multi-model AI product design orchestrator**. Give it a product brief; it runs a
 scored 13-step design pipeline and produces a 17-section system design **plus eight deep,
-specialized technical documents** a development team can build from — all through a single
-**LiteLLM** gateway, fully **Docker-Compose** deployable.
+specialized technical documents** a development team can build from — and a **gap-filling refine
+pass** that closes the specific completeness gaps (DDL, OpenAPI, payment/reporting flows,
+observability, UI flows) the document gate names. All through a single **LiteLLM** gateway, fully
+**Docker-Compose** deployable.
 
 Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
@@ -20,7 +22,7 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
 > **CI:** the pipeline (on the self-hosted `server52` runner) builds the locked Python
 > environment in a container, syntax-checks the package, and runs the hermetic test suite
-> (20 tests) with **no model and no network to LiteLLM** — then deploys `main` to the server.
+> (21 tests) with **no model and no network to LiteLLM** — then deploys `main` to the server.
 > The same `scripts/ci.sh` body is also wired for GitHub Actions (`.github/workflows/ci.yml`)
 > if the repo is ever mirrored there.
 
@@ -59,7 +61,11 @@ buildable design artifacts. It runs a **13-step multi-model pipeline** (product 
 prompt → 9 parallel specialist tasks → merge → a critic/fix/refine quality loop → a 17-section
 final deliverable), and then an **enrichment layer** that fans out into **eight specialist
 documents** (Backend, Database, API, Frontend, UX, Security, Testing, Deployment) with a
-document-completeness gate and full decision traceability.
+document-completeness gate and full decision traceability. A final **gap-filling refine pass**
+re-runs only the documents the gate flagged as gapful — injecting each one's named gaps (missing
+DDL, no exact OpenAPI, underspecified payment/reporting/observability/UI flows) plus the agent's
+own draft — so it *fills the holes* and re-scores, lifting document completeness from the ~79 a
+single pass leaves to 85+ territory.
 
 Everything is **model-agnostic**: agents resolve a *logical role* (`fast`/`deep`/`alt`) that is
 mapped to a real model by name, and every call goes through **one LiteLLM endpoint**. Swap the
@@ -80,6 +86,10 @@ whole model fleet by editing `.env` — no code changes.
   patch verifier, iterating against a shared quality rubric.
 - **Quality Gate** — 11-dimension weighted score (computed, not free-text); a separate
   **document-completeness gate** for the 8 enrichment documents.
+- **Gap-filling Refine Pass** — a targeted 2nd enrichment pass that re-runs only the
+  documents the completeness gate named as gapful (DDL / OpenAPI / payment / reporting /
+  observability / UI flows), overwrites the bundle, and re-scores — lifting completeness
+  from a single pass's ~79 toward 85+.
 - **Document Generation** — a deterministic Document Manager writes a 10-file markdown bundle +
   a traceability index (every decision → source + reason).
 - **Honest Token Ledger** — real model + tokens read back from run metrics; per-model budget
@@ -150,8 +160,13 @@ curl -s localhost:7777/health        # -> {"status":"healthy", ...}
 Run a pipeline (once healthy):
 
 ```bash
+# full design + 8 enrichment documents:
 docker compose exec agno-agentos uv run python -m workflow.run \
   enrich --brief "B2B sales management with CRM, customers, orders, sales reports and org roles"
+
+# ...and the gap-filling refine pass (closes DDL / OpenAPI / payment / observability gaps):
+docker compose exec agno-agentos uv run python -m workflow.run \
+  refine --brief "B2B sales management with CRM, customers, orders, sales reports and org roles"
 ```
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment, update, and backup guide.
@@ -189,14 +204,14 @@ ai-product-orchestrator/
 ├── personal_agent.py          # AgentOS HTTP entrypoint (:7777)
 ├── pyproject.toml / uv.lock   # Python 3.13 + agno[os,sqlite]
 ├── workflow/                  # the orchestrator package
-│   ├── engine.py              # 13-step pipeline + enrichment
+│   ├── engine.py              # 13-step pipeline + enrichment + gap-filling refine pass
 │   ├── router.py              # role→model + token ledger
 │   ├── config.py              # single source of truth
 │   ├── schemas.py             # Pydantic artifacts
 │   ├── prompts.py             # role prompts + shared rubric
 │   ├── models.py              # model factory
 │   ├── state.py               # per-step state persistence
-│   ├── run.py                 # CLI (smoke / routing / full / enrich)
+│   ├── run.py                 # CLI (smoke / routing / full / enrich / refine)
 │   ├── agents/                # Manager, ProductAnalyst, 8 enrichment, DocumentManager
 │   ├── tests/                 # hermetic test suites
 │   └── storage/               # runs + documents (gitignored, volume-mounted)
@@ -208,11 +223,18 @@ ai-product-orchestrator/
 ## Tests
 
 The test suites are hermetic (a fake router — no real LLM needed) and live in
-`workflow/tests/`. Run them inside the container:
+`workflow/tests/` (**21 tests**). Run them inside the container:
 
 ```bash
 docker compose exec agno-agentos uv run python -m workflow.tests.test_full_pipeline
 docker compose exec agno-agentos uv run python -m workflow.tests.test_enrichment
+docker compose exec agno-agentos uv run python -m workflow.tests.test_refine
+```
+
+Or run the whole suite the way CI does:
+
+```bash
+docker compose exec agno-agentos uv run --with pytest python -m pytest workflow/tests -q
 ```
 
 ## License

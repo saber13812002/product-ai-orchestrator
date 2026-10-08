@@ -236,6 +236,36 @@ def enrich_prompt(role_prompt: str, doc_type: str, detail_note: str) -> str:
             + " " + detail_note).strip()
 
 
+# --------------------------------------------------------------------------- #
+# STEP 8 — the gap-filling refine pass. A 2nd enrichment run over a document the
+# agent ALREADY wrote: it is given the completeness gate's NAMED gaps that
+# concern this document plus the agent's own v1 document, and asked to return a
+# COMPLETE, REVISED version that keeps everything already correct and ADDS the
+# missing concrete substance (a real DDL block, an exact OpenAPI table, a payment
+# flow, an observability stack, ...) — NOT a thinner rewrite.
+# --------------------------------------------------------------------------- #
+_REFINE_CONTRACT = (
+    "You are now doing a GAP-FILLING REVISE pass on the {doc_type} you already "
+    "wrote. Below are the specific completeness GAPS the Document Completeness "
+    "Gate named for this document, and your current (v1) version of the document. "
+    "Produce the FULL REVISED document: KEEP every decision, component, risk and "
+    "note that is already correct, and CLOSE the named gaps by ADDING concrete, "
+    "buildable substance — real column names and types, exact endpoint methods/ "
+    "paths/payloads, a real flow step-by-step, concrete technology names and "
+    "config, not restatements. Do not drop existing content to make room. The "
+    "`architecture` body must remain 500-900 words of implementation-grade prose. "
+    "This is a real deliverable a development team will build from — no filler."
+)
+
+
+def refine_prompt(role_prompt: str, doc_type: str, gaps: list[str]) -> str:
+    """The STEP 8 refine instruction: role + gap-fill contract + the named gaps."""
+    gap_text = "; ".join(g for g in gaps if g and g.strip()) or "general thinness"
+    return (role_prompt + " " + _REFINE_CONTRACT.format(doc_type=doc_type)
+            + f" "
+            + f"NAMED GAPS TO CLOSE for this document: {gap_text}.").strip()
+
+
 # The one-line depth directive shared by all eight (production-grade, buildable).
 # Measured live: without an explicit length target the model emits a ~1,500-token
 # doc with a thin architecture body (~270 words). The brief's priority is DOCUMENT

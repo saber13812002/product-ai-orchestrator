@@ -69,8 +69,21 @@ decision → source + reason). Zero token cost.
 | `final_reviewer` | 12 | fast | APPROVED / APPROVED_WITH_NOTES / REJECTED |
 | `final_output` | 13 | fast | 17-section deliverable |
 | `document_gate` | 14 (enrich) | fast | per-doc completeness (overall computed) |
+| `*architect` / `*designer` | 15 (refine, ×≤3) | fast | **revised** `TechnicalDocument` (gap-filled) |
+| `document_gate` | 15 (refine) | fast | per-doc completeness **re-scored** |
 
 The ≥3-models rule is met because TASK-01 runs on `deep` and TASK-05 on `alt`, the rest on `fast`.
+
+### The STEP 8 refine pass
+
+In `refine` mode the eight enrichment agents are **not** all re-run. The engine reads the pass-1
+completeness gate and re-runs **only** the targeted agents (≤ `REFINE_MAX_AGENTS`, chosen from the
+named gaps + the lowest-scoring docs). Each targeted agent gets `prompts.refine_prompt` (not
+`enrich_prompt`): its role + a "revise, don't rewrite" contract + the **named gaps** for its
+document, and it receives its **own v1 document** in the input so it extends what's already correct
+instead of starting over. The refined `TechnicalDocument`s replace their v1 counterparts, the
+deterministic `DocumentManager` rewrites the bundle, and `document_gate` re-scores — so the
+overall completeness reflects the filled gaps.
 
 ## Structured output
 

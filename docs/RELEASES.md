@@ -8,8 +8,25 @@ This project uses **Semantic Versioning** — `Major.Minor.Patch`.
 | **Minor** (`v0.Y.0`) | New features, additive changes, new docs — backward compatible. |
 | **Patch** (`v0.1.Z`) | Bug fixes, dependency/security bumps — backward compatible. |
 
-The current line is `v0.1.x` (early 0.x: treat Minor as "feature", Patch as "fix"; no stability
+The current line is `v0.2.x` (early 0.x: treat Minor as "feature", Patch as "fix"; no stability
 guarantees yet).
+
+## Changelog (recent)
+
+### v0.2.0 — gap-filling refine pass
+- **New `refine` run mode** (CLI: `workflow.run refine --brief "..."`): runs the enrichment
+  layer plus a targeted 2nd pass that re-runs only the documents the completeness gate named as
+  gapful (DDL / OpenAPI / payment / reporting / observability / UI flows), overwrites the 10-file
+  bundle, and re-scores. Lifts document completeness from a single pass's ~79 toward 85+
+  (measured live: 74 → 82, `passed` flipped to true).
+- New knobs in `workflow/config.py`: `REFINE_TOKEN_BUDGET`, `REFINE_MAX_AGENTS`,
+  `REFINE_SELF_DOC_CHARS`, `REFINE_DOC_MAX_OUTPUT`, `REFINE_GAP_KEYWORDS`.
+- New hermetic test suite `workflow/tests/test_refine.py` (suite is now **21 tests**).
+- Docs updated (README / AGENTS / ARCHITECTURE / CONFIGURATION / DEVELOPMENT).
+
+### v0.1.0 — portable repo + CI/CD
+- Docker-Compose portable package, master key scrubbed (env-only), hermetic CI/CD on the
+  self-hosted `server52` GitLab runner (test → deploy), `AGENTS.md`, LF line endings.
 
 ## Creating a release
 
