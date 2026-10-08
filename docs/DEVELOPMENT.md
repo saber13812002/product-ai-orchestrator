@@ -141,8 +141,13 @@ needs:
 ```
 
 after which `sudo gitlab-runner verify` / `gitlab-runner verify` and (for the systemd runner)
-`sudo systemctl restart gitlab-runner`. Fixed on runner #5; if a new job fails with the
-port-443 error, check whether it landed on a runner that still lacks `clone_url`.
+`sudo systemctl restart gitlab-runner`.
+
+**Status (2026-10-08): fixed on all runners and verified green.** Runner #5 `aio-server52`
+and the system runners `AI-TOOLS` (#1) + `benchmark-server52` (#6) all carry `clone_url`;
+first green pipeline observed — `#81` on `main` (`c32842a`): `test` (20 hermetic tests) →
+`deploy` (recreated `agno-agentos-repo` on 7779, health ok). If a *new* job ever fails with
+the port-443 error, check whether its runner still lacks `clone_url`.
 
 **Reboot note:** runner #5 is user-mode (no sudo available → no systemd unit). After a 52
 reboot, relaunch it with:

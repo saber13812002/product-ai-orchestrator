@@ -63,8 +63,8 @@ docker compose exec agno-agentos uv run python -m workflow.run enrich --brief ".
 ## CI/CD (GitLab, self-hosted on server 52)
 
 - **Two `shell`-executor runners serve this project, both tagged `server52`:**
-  - **`AI-TOOLS`** (runner #1, root, systemd service `gitlab-runner`, config
-    `/etc/gitlab-runner/config.toml`) — the group runner that usually picks up jobs.
+  - **`AI-TOOLS`** (runner #1) and **`benchmark-server52`** (runner #6) — root systemd service
+    `gitlab-runner`, config `/etc/gitlab-runner/config.toml`. These pick up most jobs.
   - **`aio-server52`** (runner #5, user `saber`, user-mode, config
     `/home/saber/gitlab-runner-aio/config.toml`, log `.../runner.log`).
 - **Jobs are tagged `server52`** in `.gitlab-ci.yml` (ordinary tag matching; do not depend on
@@ -74,10 +74,11 @@ docker compose exec agno-agentos uv run python -m workflow.run enrich --brief ".
   of the source (container runs as root; never let it write into the checkout).
 - **CRITICAL GOTCHA — `clone_url`:** GitLab's `external_url` is the public
   `https://git.ai.ismc.ir` (port 443), which **server 52 itself cannot reach** (it resolves to
-  a public IP). Both runners therefore need
-  `clone_url = "http://172.20.1.52:81"` in their `[[runners]]` block, else every job dies in
-  `Getting source` with `Failed to connect to git.ai.ismc.ir port 443`. (Fixed on runner #5 on
-  2026-10-07; runner #1 needs the same edit — requires sudo.)
+  a public IP). Every runner on 52 therefore carries
+  `clone_url = "http://172.20.1.52:81"` in its `[[runners]]` block, else the job dies in
+  `Getting source` with `Failed to connect to git.ai.ismc.ir port 443`. (Fixed on all runners
+  2026-10-08; first green pipeline `#81` verified that day. If a job fails with the port-443
+  error again, a new runner was likely registered without `clone_url`.)
 - **Deploy** (`scripts/deploy-repo.sh`) syncs the checkout to the deploy target and runs
   `docker compose up -d --build` + health-wait on port 7779. It **guards the deploy target's
   `.env`** across redeploys (backs it up, restores it).
