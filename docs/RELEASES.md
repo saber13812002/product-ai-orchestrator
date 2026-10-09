@@ -8,10 +8,35 @@ This project uses **Semantic Versioning** — `Major.Minor.Patch`.
 | **Minor** (`v0.Y.0`) | New features, additive changes, new docs — backward compatible. |
 | **Patch** (`v0.1.Z`) | Bug fixes, dependency/security bumps — backward compatible. |
 
-The current line is `v0.2.x` (early 0.x: treat Minor as "feature", Patch as "fix"; no stability
+The current line is `v0.3.x` (early 0.x: treat Minor as "feature", Patch as "fix"; no stability
 guarantees yet).
 
 ## Changelog (recent)
+
+### v0.3.0 — LiteLLM deployment modes (External + Bundled sidecar)
+- **Two LiteLLM deployment modes, one code path.** Mode A (external, the default) connects to a
+  LiteLLM gateway you already run; Mode B (bundled) starts the repo's own **LiteLLM sidecar** via
+  `docker compose --profile bundled-litellm up -d` — for a fresh server with no gateway. The
+  sidecar is strictly optional; `docker compose up -d` is unchanged.
+- **Single resolution point** (`workflow/config.py::resolve_endpoint()`): mode selection lives in
+  one place; `personal_agent.py` and the model factory/router all consume its result. Legacy
+  `OPENAI_*` names remain an external-mode fallback.
+- **Bundled sidecar** (`litellm/`): a secrets-free routing template (`config.yaml`) + a startup
+  renderer (`entrypoint.sh`). The renderer expands `${VAR}` from the environment at container
+  start because the official image does not expand placeholders in a mounted config (verified on
+  `main-latest`). Routes the three logical models to any OpenAI-compatible backend (vLLM, SGLang,
+  TGI, OpenAI-compatible), with a per-role `_API_BASE` / `_API_KEY` / `_API_MODEL`.
+- **Health-gated startup** (bundled): `depends_on: litellm {condition: service_healthy,
+  required: false}` — Mode A has no dependency on the internal service; Mode B waits for the
+  sidecar to be healthy before serving model calls.
+- **New CLI:** `workflow.run endpoint` (prints the resolved mode, base URL, and whether a key is
+  configured — never the key itself).
+- **9 new hermetic tests** (`workflow/tests/test_endpoint.py`) covering both modes, the legacy
+  fallback, and URL validation. Suite is now **30 tests** (was 21).
+- **Security:** no secrets in the repo; sidecar master key from `.env`; sidecar UI/API on
+  `127.0.0.1` only; no extra database service.
+- **Docs:** new [LITELLM.md](LITELLM.md) and [AI_HANDOFF.md](AI_HANDOFF.md); DEPLOYMENT /
+  CONFIGURATION / README updated for both modes.
 
 ### v0.2.0 — gap-filling refine pass
 - **New `refine` run mode** (CLI: `workflow.run refine --brief "..."`): runs the enrichment

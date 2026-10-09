@@ -5,14 +5,18 @@ from agno.db.sqlite import SqliteDb
 from agno.models.openai.chat import OpenAIChat
 from agno.os import AgentOS
 
-# Model: default stays gpt-4o. Next step (LiteLLM on 52) is done purely via env:
-#   OPENAI_API_KEY  -> the LiteLLM master/virtual key
-#   OPENAI_BASE_URL -> e.g. http://172.20.1.52:4000/v1
+# Model: env-driven, resolved by workflow.config in ONE place (STEP 9.6).
+# Mode A (external): LITELLM_BASE_URL + LITELLM_API_KEY (OPENAI_* still honored
+# as a fallback); Mode B (bundled): the compose sidecar at http://litellm:4000/v1
+# + LITELLM_MASTER_KEY. No mode-specific code here — a .env change suffices.
 # A placeholder key keeps the app bootable (health/docs/agents) before a real key is set.
+from workflow import config as _config
+
+_LITELLM_BASE_URL, _LITELLM_API_KEY = _config.resolve_endpoint()
 model = OpenAIChat(
     id=(os.getenv("AGENT_MODEL_ID") or "gpt-4o"),
-    api_key=(os.getenv("OPENAI_API_KEY") or "sk-placeholder-not-set"),
-    base_url=(os.getenv("OPENAI_BASE_URL") or None),
+    api_key=(_LITELLM_API_KEY or "sk-placeholder-not-set"),
+    base_url=(_LITELLM_BASE_URL or None),
 )
 
 agent = Agent(

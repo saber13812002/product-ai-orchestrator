@@ -40,18 +40,69 @@ MODEL_ROLES: dict[str, str] = {
 STUB_MODELS: set[str] = {"mock-agent-v1"}
 
 # --------------------------------------------------------------------------- #
-# LiteLLM endpoint (single gateway for ALL model calls)
+# LiteLLM endpoint (single gateway for ALL model calls) — STEP 9
 #
-# The gateway is EXTERNAL: this repo does NOT run LiteLLM. Point LITELLM_BASE_URL
-# at your own gateway (env), and supply LITELLM_API_KEY.
-#   * There is NO hardcoded key and NO baked-in server URL on purpose — the old
-#     in-tree defaults (a real key + an internal IP) were a credential leak and a
-#     fleet-specific address, both unsuitable for a portable repo.
-#   * Legacy OPENAI_* names are accepted as fallback so existing deployments that
-#     were never updated keep working unchanged.
+# All model calls go through ONE LiteLLM endpoint. Two deployment modes,
+# resolved in ONE place (no scattered hard-codes):
+#   * Mode A — EXTERNAL (default): the gateway is not run by this repo. Point
+#     LITELLM_BASE_URL at your own gateway (env) and supply LITELLM_API_KEY.
+#     No hardcoded key or server URL on purpose (the old in-tree defaults were
+#     a credential leak and a fleet-specific address).
+#   * Mode B — BUNDLED: the repo's own LiteLLM sidecar (compose profile
+#     `bundled-litellm`) serves the gateway; the AgentOS container reaches it
+#     at http://litellm:4000/v1 over the compose network, authenticating with
+#     the sidecar's master key (LITELLM_MASTER_KEY).
+# Legacy OPENAI_* names stay honored as an external-mode fallback so existing
+# deployments that were never updated keep working unchanged.
+#
+# `resolve_endpoint()` is the single source of truth for (base_url, api_key);
+# `personal_agent.py` and `models.py`/`router.py` all consume its result, so a
+# mode switch is a .env change, never a code change.
 # --------------------------------------------------------------------------- #
-LITELLM_BASE_URL: str = os.getenv("LITELLM_BASE_URL", os.getenv("OPENAI_BASE_URL", ""))
-LITELLM_API_KEY: str = os.getenv("LITELLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+# Where the bundled sidecar lives from the AgentOS container's point of view
+# (service name + port of the `litellm` compose service). Overridable for
+# non-compose deployments of the two containers.
+BUNDLED_LITELLM_URL: str = os.getenv("LITELLM_BUNDLED_URL", "http://litellm:4000/v1")
+LITELLM_MODE: str = os.getenv("LITELLM_MODE", "external").strip().lower()
+
+
+def resolve_endpoint(mode: Optional[str] = None) -> tuple[str, str]:
+    """Resolve the (base_url, api_key) every model call goes through.
+
+    The ONLY place mode selection happens (STEP 9.6) — agents, the model
+    factory and the router all consume the result, never the raw env vars:
+      * mode `bundled`  -> BUNDLED_LITELLM_URL (default http://litellm:4000/v1,
+        the compose service name) + LITELLM_MASTER_KEY.
+      * mode `external` (default) -> LITELLM_BASE_URL + LITELLM_API_KEY, with
+        the legacy OPENAI_* names as fallback (unchanged for existing deployments).
+
+    `mode` defaults to the LITELLM_MODE env value; tests pass it explicitly so
+    both modes are verifiable hermetically (the mode is otherwise read once at
+    import, like every other config value).
+    """
+    mode = (mode or LITELLM_MODE or "external").strip().lower()
+    if mode == "bundled":
+        base_url = os.getenv("LITELLM_BUNDLED_URL", BUNDLED_LITELLM_URL)
+        api_key = os.getenv("LITELLM_MASTER_KEY", "")
+    else:
+        base_url = os.getenv("LITELLM_BASE_URL", os.getenv("OPENAI_BASE_URL", ""))
+        api_key = os.getenv("LITELLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+    # Normalization aid (warn, don't fail): our contract is a /v1 base URL.
+    if base_url and not base_url.rstrip("/").endswith("/v1"):
+        import warnings
+        warnings.warn(
+            f"LITELLM endpoint {base_url!r} does not end with /v1 — the "
+            "orchestrator expects an OpenAI-compatible /v1 base URL."
+        )
+    return base_url, api_key
+
+
+# Module-level resolution: the existing names stay (models.py/router.py consume
+# them), but their VALUES now come from the resolver, so external mode behaves
+# exactly as before and bundled mode points at the sidecar.
+LITELLM_BASE_URL: str
+LITELLM_API_KEY: str
+LITELLM_BASE_URL, LITELLM_API_KEY = resolve_endpoint()
 LITELLM_ROUTE_LABEL: str = "litellm"  # every call is routed through LiteLLM
 
 # --------------------------------------------------------------------------- #

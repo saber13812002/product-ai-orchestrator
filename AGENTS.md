@@ -8,7 +8,9 @@ detailed docs it points to are in `docs/`.
 A multi-agent, multi-model **AI product design orchestrator** built on [Agno AgentOS](https://github.com/agno-agi/agno).
 Input: a natural-language product brief. Output: a scored 17-section system design + 8 deep
 technical documents (Backend, DB, API, Frontend, UX, Security, Testing, DevOps).
-All LLM calls go through **one LiteLLM gateway** (default `http://172.20.1.52:4000/v1`).
+All LLM calls go through **one LiteLLM gateway**, in two deployment modes: **External** (connect
+to a gateway you already run — the default) or **Bundled** (a sidecar this repo starts). Both are
+resolved in one place — `workflow/config.py::resolve_endpoint()`. See [LITELLM.md](docs/LITELLM.md).
 
 ## Repo identity
 
@@ -26,7 +28,7 @@ All LLM calls go through **one LiteLLM gateway** (default `http://172.20.1.52:40
 
 ```bash
 # Hermetic tests — NO LLM, NO LiteLLM, NO API key. Must always pass; this is what CI runs.
-uv run --with pytest python -m pytest workflow/tests -q        # expected: 21 passed
+uv run --with pytest python -m pytest workflow/tests -q        # expected: 30 passed
 
 # Or, exactly as CI runs it (throwaway python:3.13-slim container):
 bash scripts/ci-docker.sh
@@ -35,13 +37,20 @@ bash scripts/ci-docker.sh
 cp .env.example .env
 uv run personal_agent.py                                      # AgentOS HTTP on :7777
 
+# Start (live container) — two modes (see docs/LITELLM.md):
+#   docker compose up -d                              # Mode A — external gateway (default)
+#   docker compose --profile bundled-litellm up -d    # Mode B — bundled LiteLLM sidecar
+
 # Run a pipeline in the live container (on 52):
 docker compose exec agno-agentos uv run python -m workflow.run full  --brief "..."
 docker compose exec agno-agentos uv run python -m workflow.run enrich --brief "..."
 docker compose exec agno-agentos uv run python -m workflow.run refine --brief "..."
+docker compose exec agno-agentos uv run python -m workflow.run endpoint   # which mode / URL AgentOS resolved
 #   `refine` = `enrich` + a targeted 2nd pass that re-runs only the doc-completeness
 #   gate's gapful documents (DDL / OpenAPI / payment / observability / ...) to lift
 #   completeness. It uses a larger budget (config.REFINE_TOKEN_BUDGET) by default.
+#   `endpoint` prints the resolved LITELLM mode + base URL + whether a key is configured
+#   (never the key). `routing` prints the role → real-model table.
 ```
 
 ## Hard rules (do not break these)
@@ -100,5 +109,14 @@ docker compose exec agno-agentos uv run python -m workflow.run refine --brief ".
 | Hermetic test suites | `workflow/tests/` |
 | CI entry (container) | `scripts/ci-docker.sh` → `scripts/ci.sh` |
 | CI deploy | `scripts/deploy-repo.sh` |
-| Docs | `docs/` (ARCHITECTURE, DEPLOYMENT, CONFIGURATION, AGENT_DESIGN, DEVELOPMENT, RELEASES) |
+| Bundled LiteLLM sidecar (Mode B) | `litellm/config.yaml` (routing template, no secrets) + `litellm/entrypoint.sh` (renders `${VAR}` from env at start) |
+| Docs | `docs/` (ARCHITECTURE, DEPLOYMENT, CONFIGURATION, AGENT_DESIGN, DEVELOPMENT, RELEASES, LITELLM, AI_HANDOFF) |
 | Per-step project history (laptop only) | `../STEP*_REPORT.md` |
+
+> **Compose project-isolation gotcha (learned the hard way):** Docker Compose identifies a
+> container by its `(project_name, service)` label, **not** `container_name`. Starting a second
+> stack with the same project name + service `agno-agentos` (even with a different
+> `container_name`/port) will **recreate/destroy** the first. Always run an isolated test with a
+> **separate compose project**: `docker compose -p myproj --profile bundled-litellm up -d`. The
+> deploy target `agno-agentos-repo` (7779) and the production `agno-agentos` (7777) must never
+> be touched by tests.

@@ -15,14 +15,16 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 |---|---|
 | 🔵 **CI (server52 runner)** | [![pipeline](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/badges/main/pipeline.svg)](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/commits/main) — hermetic tests on every push/MR/tag: **no LLM, no API key, no cost** |
 | 🚀 **Deployment Guide** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| 📦 **Latest Release** | [`v0.1.0`](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/tags) (Semantic Versioning — see [docs/RELEASES.md](docs/RELEASES.md)) |
+| 🔌 **LiteLLM Deployment Modes** | [docs/LITELLM.md](docs/LITELLM.md) — **External** gateway (default) vs **Bundled sidecar** |
+| 🤖 **AI HANDOFF / Next Chat** | [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) — full project state for picking up where this left off |
+| 📦 **Latest Release** | [`v0.3.0`](https://git.ai.ismc.ir/common/website/ai-product-orchestrator/-/tags) (Semantic Versioning — see [docs/RELEASES.md](docs/RELEASES.md)) |
 | 🏛️ **Architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 🛠️ **Developing** | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 | 🏠 **Repository** | <https://git.ai.ismc.ir/common/website/ai-product-orchestrator> |
 
 > **CI:** the pipeline (on the self-hosted `server52` runner) builds the locked Python
 > environment in a container, syntax-checks the package, and runs the hermetic test suite
-> (21 tests) with **no model and no network to LiteLLM** — then deploys `main` to the server.
+> (30 tests) with **no model and no network to LiteLLM** — then deploys `main` to the server.
 > The same `scripts/ci.sh` body is also wired for GitHub Actions (`.github/workflows/ci.yml`)
 > if the repo is ever mirrored there.
 
@@ -36,16 +38,23 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 > ```bash
 > git clone https://git.ai.ismc.ir/common/website/ai-product-orchestrator.git ai-product-orchestrator
 > cd ai-product-orchestrator
-> cp .env.example .env      # then fill in LITELLM_BASE_URL + LITELLM_API_KEY
-> docker compose up -d
+> cp .env.example .env      # Mode A: fill LITELLM_BASE_URL + LITELLM_API_KEY
+> docker compose up -d            # Mode A (external gateway — the default)
+> # Mode B (no gateway yet — start a bundled LiteLLM sidecar instead):
+> #   cp .env.example .env        # fill LITELLM_MASTER_KEY + *_MODEL_API_*
+> #   docker compose --profile bundled-litellm up -d
 > docker compose logs -f
 > ```
+>
+> See [docs/LITELLM.md](docs/LITELLM.md) for the two modes.
 > </details>
 
 ---
 
 ## 📌 Documentation
 
+- 🤖 **AI HANDOFF / Next Chat** — [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) — full project state: architecture, servers, version, model routing, STEPS 1–9, latest tests/release, open problems, next STEP
+- 🔌 **LiteLLM Deployment Modes** — [docs/LITELLM.md](docs/LITELLM.md) — external gateway vs bundled sidecar
 - 🤖 **AGENTS.md** — orientation for AI coding agents (commands, CI/CD gotchas, hard rules)
 - 🚀 **Deployment Guide** — [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - 🏛️ **Architecture** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -76,7 +85,9 @@ whole model fleet by editing `.env` — no code changes.
 - **AgentOS Runtime** — Agno AgentOS HTTP service (health/docs/agents) on port 7777.
 - **Multi-Model Routing** — logical roles → real models; ≥3 distinct models per run; no model
   names hardcoded in agents.
-- **LiteLLM Integration** — a single OpenAI-compatible gateway for every call.
+- **LiteLLM Integration** — a single OpenAI-compatible gateway for every call, in two modes:
+  connect to an **external** LiteLLM you already run (default), or bring up a **bundled sidecar**
+  this repo starts on a fresh server (see [docs/LITELLM.md](docs/LITELLM.md)).
 - **Product Analysis** — structured extraction of the brief (goals, users, constraints).
 - **Architecture Generation** — a 13-section master design prompt.
 - **Backend Design** · **Database Design** · **API Design** · **Frontend Design** — deep
@@ -144,17 +155,27 @@ Documents
 git clone https://git.ai.ismc.ir/common/website/ai-product-orchestrator.git ai-product-orchestrator
 cd ai-product-orchestrator
 
-cp .env.example .env          # then fill in LITELLM_BASE_URL, LITELLM_API_KEY, AGENT_MODEL_*
+cp .env.example .env          # then fill in the block for your mode (below)
 
+# Mode A — you already run a LiteLLM gateway (the default):
+#   .env:  LITELLM_BASE_URL, LITELLM_API_KEY, AGENT_MODEL_*
 docker compose up -d
+
+# Mode B — no gateway yet; start a bundled LiteLLM sidecar:
+#   .env:  LITELLM_MODE=bundled, LITELLM_MASTER_KEY, *_MODEL_API_*
+docker compose --profile bundled-litellm up -d
+
 docker compose logs -f
 ```
+
+Full details for both modes: [docs/LITELLM.md](docs/LITELLM.md).
 
 Verify it's up:
 
 ```bash
 curl -s localhost:7777/health        # -> {"status":"healthy", ...}
 ./scripts/healthcheck.sh             # container + health + routing
+docker compose exec agno-agentos uv run python -m workflow.run endpoint   # -> which mode/URL
 ```
 
 Run a pipeline (once healthy):
@@ -173,9 +194,12 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment, update, an
 
 ## Configuration
 
-Set your gateway and models in `.env`:
+Point at your gateway and models in `.env` (Mode A shown; Mode B in
+[docs/LITELLM.md](docs/LITELLM.md)):
 
 ```ini
+# Mode A — external gateway (default)
+LITELLM_MODE=external
 LITELLM_BASE_URL=http://172.20.1.52:4000/v1
 LITELLM_API_KEY=<your-key>
 AGENT_MODEL_FAST=qwen38-nothinking
@@ -183,7 +207,8 @@ AGENT_MODEL_DEEP=qwen38
 AGENT_MODEL_ALT=qwen38-sglang
 ```
 
-No secrets live in the repo. Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+No secrets live in the repo. Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and
+[docs/LITELLM.md](docs/LITELLM.md).
 
 ## Repository layout
 
@@ -203,6 +228,9 @@ ai-product-orchestrator/
 ├── LICENSE
 ├── personal_agent.py          # AgentOS HTTP entrypoint (:7777)
 ├── pyproject.toml / uv.lock   # Python 3.13 + agno[os,sqlite]
+├── litellm/                   # STEP 9 bundled sidecar (Mode B)
+│   ├── config.yaml            #   routing TEMPLATE, no secrets (${VAR}-driven)
+│   └── entrypoint.sh          #   renders the config from env, then starts LiteLLM
 ├── workflow/                  # the orchestrator package
 │   ├── engine.py              # 13-step pipeline + enrichment + gap-filling refine pass
 │   ├── router.py              # role→model + token ledger
@@ -215,20 +243,21 @@ ai-product-orchestrator/
 │   ├── agents/                # Manager, ProductAnalyst, 8 enrichment, DocumentManager
 │   ├── tests/                 # hermetic test suites
 │   └── storage/               # runs + documents (gitignored, volume-mounted)
-├── docs/                      # ARCHITECTURE / DEPLOYMENT / CONFIGURATION / AGENT_DESIGN / DEVELOPMENT / RELEASES
+├── docs/                      # ARCHITECTURE / DEPLOYMENT / CONFIGURATION / AGENT_DESIGN / DEVELOPMENT / RELEASES / LITELLM / AI_HANDOFF
 ├── scripts/                   # install.sh / start.sh / healthcheck.sh / ci.sh / ci-docker.sh / deploy-repo.sh
 └── tests/                     # README pointing at workflow/tests (run in-container)
 ```
 
 ## Tests
 
-The test suites are hermetic (a fake router — no real LLM needed) and live in
-`workflow/tests/` (**21 tests**). Run them inside the container:
+The test suites are hermetic (a fake router — no real LLM, no LiteLLM, no API key) and live in
+`workflow/tests/` (**30 tests**). Run them inside the container:
 
 ```bash
 docker compose exec agno-agentos uv run python -m workflow.tests.test_full_pipeline
 docker compose exec agno-agentos uv run python -m workflow.tests.test_enrichment
 docker compose exec agno-agentos uv run python -m workflow.tests.test_refine
+docker compose exec agno-agentos uv run python -m workflow.tests.test_endpoint   # STEP 9 mode selection
 ```
 
 Or run the whole suite the way CI does:

@@ -8,6 +8,9 @@ Usage (on the 52 container, from /app):
     # routing table (logical role -> real model)
     uv run python -m workflow.run routing
 
+    # STEP 9: which LiteLLM endpoint the orchestrator resolves to (mode A/B)
+    uv run python -m workflow.run endpoint
+
     # STEP 3 full 13-step pipeline (TEST MODE by default: 20k budget)
     uv run python -m workflow.run full --brief "یک سیستم ساده مدیریت فروش ..."
     uv run python -m workflow.run full --brief "..." --full   # FULL MODE: 100k budget
@@ -109,6 +112,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("routing", help="Print the logical-role -> real-model table")
 
+    sub.add_parser(
+        "endpoint",
+        help="STEP 9: print the LiteLLM endpoint the orchestrator resolves to "
+             "(mode, base URL, and whether a key is configured) — no model call",
+    )
+
     p_full = sub.add_parser("full", help="Run the STEP 3 full 13-step pipeline")
     p_full.add_argument("--brief", required=True, help="Raw Product Brief")
     p_full.add_argument("--full", action="store_true",
@@ -145,6 +154,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "routing":
         print(json.dumps(Engine().routing_table(), indent=2, ensure_ascii=False))
+        return 0
+
+    if args.cmd == "endpoint":
+        # STEP 9 — show the config-driven endpoint resolution (9.6): which mode,
+        # which base URL, and whether a key is present. Never prints the key.
+        from . import config
+        base_url, api_key = config.resolve_endpoint()
+        print(json.dumps(
+            {
+                "mode": config.LITELLM_MODE,
+                "base_url": base_url or None,
+                "key_configured": bool(api_key),
+            },
+            indent=2,
+        ))
         return 0
 
     if args.cmd == "smoke":

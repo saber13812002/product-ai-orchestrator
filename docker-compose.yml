@@ -1,12 +1,18 @@
 # AI Product Orchestrator — Docker Compose
 #
-#   cp .env.example .env   # then fill in your LiteLLM gateway + key
-#   docker compose up -d
+#   Mode A (default, external gateway) — behavior unchanged:
+#       cp .env.example .env   # fill LITELLM_BASE_URL + LITELLM_API_KEY
+#       docker compose up -d
 #
-# One service. The code is baked into the image; all mutable state lives in the
-# `agentos-data` volume (SQLite + pipeline runs + the rendered document bundle),
-# so a clean server has no host-directory ownership issues and updates are just
-# `git pull && docker compose build && docker compose up -d`.
+#   Mode B (bundled LiteLLM sidecar, STEP 9):
+#       cp .env.example .env   # fill LITELLM_MASTER_KEY + FAST/DEEP/ALT_MODEL_*
+#       docker compose --profile bundled-litellm up -d
+#
+# One service by default (the code is baked into the image; all mutable state
+# lives in the `agentos-data` volume, so a clean server has no host-directory
+# ownership issues and updates are just `git pull && docker compose build &&
+# docker compose up -d`). The optional `litellm` sidecar (STEP 9) is a template
+# gateway with NO secrets of its own — its keys come from .env at runtime.
 name: ai-product-orchestrator
 
 services:
@@ -20,10 +26,21 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-7777}:7777"
-    # All variables (LITELLM_BASE_URL, LITELLM_API_KEY, AGENT_MODEL_*, ...) come
-    # from the user's .env. The block below DERIVES the AgentOS personal-agent
-    # vars from the canonical ones so a single .env drives both the HTTP API and
-    # the pipeline; environment wins over env_file for any name it also sets.
+    # STEP 9 — only wait for the bundled sidecar when it is actually up (i.e.
+    # the `bundled-litellm` profile is enabled). In Mode A (external) the
+    # `litellm` service is filtered out by its profile, and `required: false`
+    # makes the dependency a no-op — external mode has NO dependency on an
+    # internal service. (Needs compose v2.20+; see docs/LITELLM.md.)
+    depends_on:
+      litellm:
+        condition: service_healthy
+        required: false
+    # All variables (LITELLM_MODE, LITELLM_BASE_URL, LITELLM_API_KEY,
+    # LITELLM_MASTER_KEY, AGENT_MODEL_*, ...) come from the user's .env. The
+    # code resolves the gateway in ONE place (workflow.config.resolve_endpoint):
+    # external -> LITELLM_BASE_URL/LITELLM_API_KEY; bundled -> the sidecar at
+    # http://litellm:4000/v1 + LITELLM_MASTER_KEY. The OPENAI_* lines below are
+    # legacy aliases only (honored by the resolver's external fallback).
     env_file:
       - .env
     environment:
@@ -40,5 +57,90 @@ services:
       # inspection / off-box backup. Comment out the volume line above first.
       # - ./workflow/storage:/data
 
+  # --------------------------------------------------------------------------- #
+  # STEP 9 (Mode B) — optional bundled LiteLLM gateway.
+  # Starts ONLY with:  docker compose --profile bundled-litellm up -d
+  #   * config has no secrets — every key is injected from .env (below).
+  #   * routes the orchestrator's 3 logical models (fast/deep/alt) to ANY
+  #     OpenAI-compatible backend (OpenAI, Anthropic, vLLM, SGLang, TGI, ...).
+  #   * AgentOS talks to it over the compose network (http://litellm:4000/v1);
+  #     LITELLM_PORT is only for humans reaching the gateway/UI from the host.
+  #   * UI/admin is reachable ONLY via the host's loopback (127.0.0.1) — it is
+  #     never published on a public interface (STEP 9.8).
+  # --------------------------------------------------------------------------- #
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    profiles: ["bundled-litellm"]
+    # Default name avoids colliding with a pre-existing external LiteLLM
+    # container on the same host; override if needed.
+    container_name: ${LITELLM_CONTAINER_NAME:-litellm-sidecar}
+    restart: unless-stopped
+    # The template config uses ${VAR} placeholders. The official image does NOT
+    # expand ${VAR} in a mounted config (verified on main-latest), so we render
+    # it from the environment first via litellm/entrypoint.sh, then start the
+    # gateway on the rendered file. The image's own entrypoint is replaced; the
+    # renderer execs `litellm --config <rendered> <args>` where <args> = the
+    # image's default `--port 4000`.
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    command: ["--port", "4000"]
+    environment:
+      # Where entrypoint.sh reads the template and writes the rendered config
+      # (both in-container; the template is mounted read-only below).
+      LITELLM_CONFIG_TEMPLATE: /app/config.template.yaml
+      LITELLM_CONFIG_OUT: /tmp/litellm.config.rendered.yaml
+      # The sidecar's master key — required; every gateway endpoint is
+      # protected by it and AgentOS authenticates with it (LITELLM_MASTER_KEY).
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # The 3 logical models the orchestrator routes. The sidecar exposes each
+      # under the SAME name AgentOS sends (AGENT_MODEL_FAST/_DEEP/_ALT) —
+      # model_name: ${FAST_MODEL} expands to AGENT_MODEL_FAST, etc. — and
+      # forwards it to a real OpenAI-compatible backend. All env-driven:
+      #   FAST/DEEP/ALT_MODEL        = the alias AgentOS calls (AGENT_MODEL_*)
+      #   *_API_BASE                 = the backend's /v1 URL (vLLM/SGLang/TGI/OpenAI)
+      #   *_API_KEY                  = the backend's key. Leave empty for local
+      #                                no-auth backends — a non-empty "dummy"
+      #                                placeholder is used, because the OpenAI
+      #                                client refuses to boot with a blank key
+      #                                (the no-auth backend ignores it anyway).
+      #   *_API_MODEL                = the model ID that backend serves. Defaults
+      #                                to the matching AGENT_MODEL_* (no re-mapping);
+      #                                set it only when the backend serves a
+      #                                different/ugly ID (e.g. a raw Qwen vLLM
+      #                                serving "/models/Qwen3.8-27B-FP8").
+      FAST_MODEL: ${AGENT_MODEL_FAST:-qwen38-nothinking}
+      FAST_MODEL_API_BASE: ${FAST_MODEL_API_BASE:-}
+      FAST_MODEL_API_KEY: ${FAST_MODEL_API_KEY:-dummy}
+      FAST_MODEL_API_MODEL: ${FAST_MODEL_API_MODEL:-${AGENT_MODEL_FAST:-qwen38-nothinking}}
+      DEEP_MODEL: ${AGENT_MODEL_DEEP:-qwen38}
+      DEEP_MODEL_API_BASE: ${DEEP_MODEL_API_BASE:-}
+      DEEP_MODEL_API_KEY: ${DEEP_MODEL_API_KEY:-dummy}
+      DEEP_MODEL_API_MODEL: ${DEEP_MODEL_API_MODEL:-${AGENT_MODEL_DEEP:-qwen38}}
+      ALT_MODEL: ${AGENT_MODEL_ALT:-qwen38-sglang}
+      ALT_MODEL_API_BASE: ${ALT_MODEL_API_BASE:-}
+      ALT_MODEL_API_KEY: ${ALT_MODEL_API_KEY:-dummy}
+      ALT_MODEL_API_MODEL: ${ALT_MODEL_API_MODEL:-${AGENT_MODEL_ALT:-qwen38-sglang}}
+      STUB_MODEL: ${AGENT_MODEL_STUB:-mock-agent-v1}
+    volumes:
+      # Template config (no secrets) + the startup renderer, both read-only.
+      # The renderer writes the rendered config to the (writable) container FS.
+      - ./litellm/config.yaml:/app/config.template.yaml:ro
+      - ./litellm/entrypoint.sh:/app/entrypoint.sh:ro
+      # Separate volume for LiteLLM's own state (sqlite db for spend logs /
+      # virtual keys / config store) — kept isolated from the AgentOS data.
+      - litellm-data:/app/data
+    ports:
+      # Host-side access only (UI + direct API). 4100 by default so it never
+      # collides with an external gateway on 4000. Change in .env if needed.
+      - "127.0.0.1:${LITELLM_PORT:-4100}:4000"
+    healthcheck:
+      # /health/liveliness is LiteLLM's process-level check (200 = process up
+      # and serving; model backends are validated lazily on first call).
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=8).status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      start_period: 45s
+      retries: 6
+
 volumes:
   agentos-data:
+  litellm-data:

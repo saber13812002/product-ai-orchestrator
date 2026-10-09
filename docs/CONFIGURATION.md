@@ -7,18 +7,44 @@ real value comes from `.env`.
 ## Environment variables
 
 The single source of truth for the container is your `.env` (see
-[`.env.example`](../.env.example)). The variables the application actually reads:
+[`.env.example`](../.env.example)). **Full mode details are in [LITELLM.md](LITELLM.md).** The
+variables the application actually reads:
+
+### Mode selection + endpoint (STEP 9)
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
-| `LITELLM_BASE_URL` | ✅ | *(empty — you must set it)* | Base URL of your LiteLLM gateway, e.g. `http://172.20.1.52:4000/v1`. |
-| `LITELLM_API_KEY` | ✅ | *(empty)* | The LiteLLM master / virtual key. **Never commit it.** |
+| `LITELLM_MODE` | ⬜ | `external` | `external` (use your own gateway) or `bundled` (use the sidecar this repo starts). |
+| `LITELLM_BASE_URL` | ✅ (external) | *(empty)* | Base URL of your LiteLLM gateway, e.g. `http://172.20.1.52:4000/v1`. |
+| `LITELLM_API_KEY` | ✅ (external) | *(empty)* | The LiteLLM master / virtual key. **Never commit it.** |
+| `LITELLM_MASTER_KEY` | ✅ (bundled) | *(empty)* | The sidecar's master key. AgentOS authenticates to the sidecar with this same value. **Generate one; never commit it.** |
+
+In `external` mode the endpoint is `LITELLM_BASE_URL` / `LITELLM_API_KEY`; in `bundled` mode it's
+the sidecar at `http://litellm:4000/v1` / `LITELLM_MASTER_KEY`. All resolved in one place —
+`workflow/config.py::resolve_endpoint()`.
+
+### Models, ports, storage
+
+| Variable | Required | Default | Meaning |
+|---|---|---|---|
 | `AGENT_MODEL_FAST` | ⬜ | `qwen38-nothinking` | Logical `fast` role — high-volume, structured, **no thinking**. Must reliably emit complete structured JSON. |
 | `AGENT_MODEL_DEEP` | ⬜ | `qwen38` | Logical `deep` role — deep reasoning (**thinking ON**). |
 | `AGENT_MODEL_ALT` | ⬜ | `qwen38-sglang` | Logical `alt` role — a second/third engine. |
 | `AGENT_MODEL_STUB` | ⬜ | `mock-agent-v1` | Deterministic stub used only to prove routing. |
 | `PORT` | ⬜ | `7777` | Host port the HTTP API is published on. |
 | `DATABASE_URL` | ⬜ | *(runtime default `/data`)* | Reserved for a storage override; the AgentOS SQLite store defaults to the volume. |
+
+### Bundled sidecar backends (Mode B only)
+
+These configure where the sidecar routes each role. **Unused in external mode.**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `FAST/DEEP/ALT_MODEL_API_BASE` | *(empty)* | The backend's `/v1` URL for that role (vLLM / SGLang / OpenAI-compatible). |
+| `FAST/DEEP/ALT_MODEL_API_KEY` | `dummy` (when unset) | The backend's key. Leave empty for local no-auth servers. |
+| `FAST/DEEP/ALT_MODEL_API_MODEL` | the matching `AGENT_MODEL_*` | The model id that backend serves. Set it only when the backend serves a different/ugly id. |
+| `LITELLM_PORT` | `4100` | Host port (127.0.0.1) for the sidecar UI/API. |
+| `LITELLM_CONTAINER_NAME` | `litellm-sidecar` | Rename the sidecar if the name is taken. |
 
 ### Legacy aliases
 
@@ -79,10 +105,17 @@ configure. Two properties matter (learned from live runs):
 To deploy on a totally different fleet, change only the four `AGENT_MODEL_*` values in `.env` —
 no code changes. Verify with `docker compose exec agno-agentos uv run python -m workflow.run routing`.
 
+In **bundled mode** you also set the `*_MODEL_API_*` backend vars so the sidecar can reach each
+model — see [LITELLM.md](LITELLM.md#model-mapping-the-name-that-must-match) and
+[LITELLM.md](LITELLM.md#local--openai-compatible-models).
+
 ## Security
 
-- **No secrets in the repo.** The only required secret is `LITELLM_API_KEY`, supplied via `.env`,
-  which is gitignored. The old version carried a hardcoded default key — that was removed as part
-  of packaging.
-- **Least privilege:** the container runs as a non-root user (`appuser`, uid 10001).
-- **Volume isolation:** all mutable state is in the named volume; the image is read-only.
+- **No secrets in the repo.** The only required secrets are `LITELLM_API_KEY` (external mode) or
+  `LITELLM_MASTER_KEY` (bundled mode), supplied via `.env`, which is gitignored. The
+  `litellm/config.yaml` sidecar template carries none. The old version carried a hardcoded default
+  key — that was removed as part of packaging.
+- **Least privilege:** the containers run as a non-root user (`appuser`, uid 10001).
+- **Loopback-only sidecar UI:** in bundled mode the sidecar's UI/API is published on `127.0.0.1`
+  only, never a public interface.
+- **Volume isolation:** all mutable state is in named volumes; the image is read-only.

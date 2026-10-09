@@ -142,6 +142,40 @@ stub → AGENT_MODEL_STUB (default mock-agent-v1)       # deterministic routing 
 All calls go through the single `LITELLM_BASE_URL`. **Swapping the entire model fleet is a
 change to `.env` — no code change.**
 
+## LiteLLM deployment modes (STEP 9)
+
+The gateway AgentOS reaches is resolved in **exactly one place** —
+`workflow/config.py::resolve_endpoint()` — which `personal_agent.py` and the model factory/router
+both consume. Two modes, one code path:
+
+```
+Mode A — External (default)         Mode B — Bundled sidecar
+LITELLM_MODE=external (or unset)    LITELLM_MODE=bundled
+        │                                   │
+        ▼                                   ▼
+ your existing LiteLLM          the sidecar THIS REPO starts
+ (LITELLM_BASE_URL/KEY)         (compose profile `bundled-litellm`)
+        │                                   │
+        └──────────► same resolve_endpoint() ◄──────────┘
+                     → (base_url, api_key)
+```
+
+| | Mode A — External | Mode B — Bundled |
+|---|---|---|
+| Who runs LiteLLM | you | this repo (the `litellm` service) |
+| Start | `docker compose up -d` | `docker compose --profile bundled-litellm up -d` |
+| `.env` | `LITELLM_BASE_URL`, `LITELLM_API_KEY` | `LITELLM_MODE=bundled`, `LITELLM_MASTER_KEY`, `*_MODEL_API_*` |
+| Endpoint AgentOS uses | your `LITELLM_BASE_URL` | `http://litellm:4000/v1` |
+
+The sidecar is **strictly optional** — `docker compose up -d` never starts it. In bundled mode
+`agno-agentos` has `depends_on: litellm {condition: service_healthy, required: false}`, so Mode A
+has no dependency on any internal service and Mode B waits for the sidecar to be healthy before
+serving model calls. The sidecar (`litellm/`) is a transparent alias layer: it exposes each model
+under the same name AgentOS sends (`AGENT_MODEL_*`) and forwards to a real backend. Its config is
+a **secrets-free template** rendered from the environment at startup by `litellm/entrypoint.sh`
+(the official LiteLLM image does not expand `${VAR}` in a mounted config — verified on
+`main-latest`). Full details, model mapping, and troubleshooting: [LITELLM.md](LITELLM.md).
+
 ## State & data
 
 - Every step persists `state.json` (product analysis, design versions, scores, final review,

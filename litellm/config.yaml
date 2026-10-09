@@ -1,0 +1,82 @@
+# =============================================================================
+# Bundled LiteLLM sidecar — model routing TEMPLATE (STEP 9, Mode B)
+#
+#   * NO SECRETS IN THIS FILE. Backend URLs/keys/model-ids come from the process
+#     environment (set in docker-compose.yml from your .env). Every ${VAR} below
+#     is expanded from the env at container start by litellm/entrypoint.sh
+#     (the official image does NOT expand ${VAR} in a mounted config — verified
+#     on main-latest; without the renderer the proxy calls a literal
+#     "${FAST_MODEL_API_BASE}" URL and fails every call).
+#
+#   * model_name = the alias AgentOS CALLS the model by. It is set to
+#     ${FAST_MODEL}/${DEEP_MODEL}/${ALT_MODEL}, which compose maps to your
+#     AGENT_MODEL_FAST/_DEEP/_ALT — so the sidecar exposes exactly the names
+#     AgentOS sends and the backend routing stays env-driven. Change AGENT_MODEL_*
+#     in .env and both the alias and the default backend id follow automatically.
+#
+#   * Per-role backend vars (set in .env, passed through docker-compose.yml):
+#       *_API_BASE   = the backend's /v1 URL (vLLM, SGLang, TGI, OpenAI, ...)
+#       *_API_KEY    = the backend's key (empty for local no-auth servers)
+#       *_API_MODEL  = the model ID that backend actually SERVES. Defaults to the
+#                      matching AGENT_MODEL_* (no re-mapping); set it only when
+#                      your backend serves a different/ugly ID (e.g. a raw Qwen
+#                      vLLM serving "/models/Qwen3.8-27B-FP8").
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. set LITELLM_MASTER_KEY + the FAST/DEEP/ALT_MODEL_API_* backends
+#   3. (reference Qwen fleet only) uncomment the enable_thinking snippet on `fast`
+#   4. docker compose --profile bundled-litellm up -d
+# =============================================================================
+
+model_list:
+  # high-volume STRUCTURED steps (the no-thinking model). In the reference Qwen
+  # fleet this is the thinking model served with thinking FORCED OFF (the
+  # extra_body block, uncommented for that fleet) so every output token is
+  # content and JSON stays complete.
+  - model_name: ${FAST_MODEL}
+    litellm_params:
+      model: openai/${FAST_MODEL_API_MODEL}
+      api_base: ${FAST_MODEL_API_BASE}
+      api_key: ${FAST_MODEL_API_KEY}
+      # REFERENCE QWEN FLEET ONLY: uncomment to force thinking OFF on the
+      # structured model (vLLM chat template). Remove for backends that are
+      # already no-thinking, or that reject unknown params (e.g. real OpenAI).
+      # extra_body:
+      #   chat_template_kwargs:
+      #     enable_thinking: false
+
+  # deep reasoning (thinking ON)
+  - model_name: ${DEEP_MODEL}
+    litellm_params:
+      model: openai/${DEEP_MODEL_API_MODEL}
+      api_base: ${DEEP_MODEL_API_BASE}
+      api_key: ${DEEP_MODEL_API_KEY}
+
+  # alternate engine (thinking ON)
+  - model_name: ${ALT_MODEL}
+    litellm_params:
+      model: openai/${ALT_MODEL_API_MODEL}
+      api_base: ${ALT_MODEL_API_BASE}
+      api_key: ${ALT_MODEL_API_KEY}
+
+# Optional: the deterministic routing stub (workflow.config STUB_MODELS).
+# Uncomment and point at any cheap model if you want `smoke` runs to work
+# through the sidecar too:
+#  - model_name: ${STUB_MODEL}
+#    litellm_params:
+#      model: openai/${FAST_MODEL_API_MODEL}
+#      api_base: ${FAST_MODEL_API_BASE}
+#      api_key: ${FAST_MODEL_API_KEY}
+
+# Keep the sidecar lean: plain logging, no spend-tracking database required.
+# (LiteLLM keeps its optional sqlite in /app/data — the litellm-data volume —
+# only if you enable spend logs / virtual keys later; no extra service needed.)
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  # The master key is provided via the LITELLM_MASTER_KEY environment variable
+  # (see docker-compose.yml). It is REQUIRED — recent LiteLLM refuses to boot
+  # with an empty one. Every gateway endpoint is protected by it; AgentOS
+  # authenticates with the same value (its .env LITELLM_MASTER_KEY).

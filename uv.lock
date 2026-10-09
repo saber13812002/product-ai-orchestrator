@@ -43,7 +43,7 @@ sqlite = [
 
 [[package]]
 name = "agno-agentos"
-version = "0.1.0"
+version = "0.3.0"
 source = { virtual = "." }
 dependencies = [
     { name = "agno", extra = ["os", "sqlite"] },
