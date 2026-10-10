@@ -75,11 +75,13 @@ docker compose exec agno-agentos uv run python -m workflow.run endpoint   # whic
 
 ## CI/CD (GitLab, self-hosted on server 52)
 
-- **Two `shell`-executor runners serve this project, both tagged `server52`:**
-  - **`AI-TOOLS`** (runner #1) and **`benchmark-server52`** (runner #6) — root systemd service
-    `gitlab-runner`, config `/etc/gitlab-runner/config.toml`. These pick up most jobs.
-  - **`aio-server52`** (runner #5, user `saber`, user-mode, config
-    `/home/saber/gitlab-runner-aio/config.toml`, log `.../runner.log`).
+- **The project is served by the healthy root runner** **`AI-TOOLS`** (runner #1) — root systemd
+  service `gitlab-runner`, config `/etc/gitlab-runner/config.toml`. All `server52` jobs run on it.
+  **Do NOT (re)start `aio-server52` (runner #5):** it is a user-mode shell runner (user `saber`,
+  config `/home/saber/gitlab-runner-aio/config.toml`, log `.../runner.log`) that **failed every job
+  at `prepare environment: exit status 1`** (see below) and was **stopped + deactivated in GitLab on
+  2026-10-10** (`Ci::Runner.find(5).update!(active: false)`). It is redundant now that #1 is healthy.
+  If it is ever reactivated it will race #1 for jobs and turn the pipeline red again.
 - **Jobs are tagged `server52`** in `.gitlab-ci.yml` (ordinary tag matching; do not depend on
   `run_untagged_jobs`).
 - **Shell runners ignore `image:`** — the `test` job spawns its own `python:3.13-slim`
@@ -94,10 +96,23 @@ docker compose exec agno-agentos uv run python -m workflow.run endpoint   # whic
   error again, a new runner was likely registered without `clone_url`.)
 - **Deploy** (`scripts/deploy-repo.sh`) syncs the checkout to the deploy target and runs
   `docker compose up -d --build` + health-wait on port 7779. It **guards the deploy target's
-  `.env`** across redeploys (backs it up, restores it).
-- **Reboot note:** runner #5 is user-mode (no sudo → no systemd). If 52 reboots, relaunch it:
-  `setsid nohup /usr/local/bin/gitlab-runner run --config /home/saber/gitlab-runner-aio/config.toml \
-   > /home/saber/gitlab-runner-aio/runner.log 2>&1 &`
+  `.env`** across redeploys (backs it up, restores it). The deploy target dir
+  (`/home/saber/saberprojects/ai-product-orchestrator`) is **root-owned and file-synced** (not a
+  git clone) — that's why the `deploy` job runs fine on the root runner #1.
+- **CI/CD gotcha — a broken user-mode runner was stealing jobs (STEP 9.5, fixed 2026-10-10):**
+  the user-mode `aio-server52` (runner #5) failed **every** job at
+  `prepare environment: exit status 1` (~13 ms, **before** the job script ran) — both `test` and
+  `deploy`. Because it had `run_untagged_jobs=true` + `check_interval=0` and shared the
+  `server52` tag with the healthy root runner #1, GitLab **load-balanced** jobs between the two and
+  every job that landed on #5 died, so the pipeline was flaky/red and 7779 never auto-redeployed.
+  Fix (no sudo): **stopped the process** and **deactivated it in GitLab**
+  (`Ci::Runner.find(5).update!(active: false)`) so all `server52` jobs run deterministically on #1.
+  Verified: pipeline for `main` @ `v0.3.0` went green (test 30 passed → deploy 7779 healthy).
+  The exact `prepare environment` cause is in the job **trace** in GitLab (the runner log only shows
+  the generic hint); it is specific to #5's user-mode shell-prep context and does not affect #1.
+- **Reboot note:** runner #1 is a root systemd service (`gitlab-runner`) and restarts automatically.
+  **Do NOT** relaunch the user-mode runner #5 after a reboot (it is disabled on purpose — see above);
+  #1 alone serves this project.
 
 ## Key locations
 

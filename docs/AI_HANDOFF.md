@@ -4,7 +4,7 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: 2026-10-09 · Latest release: **v0.3.0** · Test suite: **30 tests** (hermetic)._
+_Last updated: 2026-10-10 · Latest release: **v0.3.0** · Test suite: **30 tests** (hermetic) · CI chain: **green** (runner #1)._
 
 ## 1. What this is
 
@@ -40,8 +40,9 @@ flows). Every LLM call goes through **one LiteLLM gateway**, and the whole thing
 - **Package version** (`pyproject.toml`): `0.3.0` (the **git tag** is canonical).
 - **Test suite:** **30 hermetic tests** (was 21 in v0.2.0; STEP 9 added 9 in
   `workflow/tests/test_endpoint.py`). No LLM, no network, no API key — this is what CI runs.
-- **CI:** GitLab pipeline on the `server52` runner — hermetic tests → deploy `main` to 7779.
-  Green.
+- **CI:** GitLab pipeline on the root `server52` runner (**`AI-TOOLS`, runner #1**) — hermetic
+  tests → deploy `main` to 7779. **Green** (verified 2026-10-10). The broken user-mode runner
+  `aio-server52` (#5) was **stopped + deactivated** (see §7) so it can no longer steal jobs.
 
 ## 4. Architecture (one paragraph)
 
@@ -82,7 +83,7 @@ active mode; everything consumes that.
 
 Full details: [LITELLM.md](LITELLM.md).
 
-## 5. STEPS 1–9 (what's done)
+## 5. STEPS 1–10 (what's done)
 
 | Step | What | Status |
 |---|---|---|
@@ -92,7 +93,8 @@ Full details: [LITELLM.md](LITELLM.md).
 | **6** | Portable Docker-Compose repo; master key scrubbed to env-only. | ✅ |
 | **7** | CI/CD on the `server52` runner (test → deploy); `clone_url` gotcha fixed; first green pipeline #81. Released **v0.1.0**. | ✅ |
 | **8** | Gap-filling **refine pass** (`workflow.run refine`) — targeted 2nd pass re-runs only the gate's gapful docs. Live 74→82. Released **v0.2.0**. | ✅ |
-| **9** | **LiteLLM deployment modes** — External (default) + Bundled sidecar; single `resolve_endpoint()`; sidecar `litellm/` with an env-rendering entrypoint (the official image doesn't expand `${VAR}` in a mounted config); health-gated startup; `workflow.run endpoint` CLI; 9 new tests (suite 30). Released **v0.3.0**. | ✅ (this session) |
+| **9** | **LiteLLM deployment modes** — External (default) + Bundled sidecar; single `resolve_endpoint()`; sidecar `litellm/` with an env-rendering entrypoint (the official image doesn't expand `${VAR}` in a mounted config); health-gated startup; `workflow.run endpoint` CLI; 9 new tests (suite 30). Released **v0.3.0**. | ✅ |
+| **9.5** | **CI runner repair** — the user-mode runner `aio-server52` (#5) failed every job at `prepare environment: exit status 1` and was stealing (load-balancing) jobs away from the healthy root runner #1, leaving the pipeline red and 7779 stuck on v0.2.0. Stopped #5 + deactivated it in GitLab (`active=false`); all `server52` jobs now run on #1. Real green pipeline for `main` @ v0.3.0 → 7779 auto-deployed to v0.3.0. | ✅ (this session) |
 
 ## 6. Latest tests & verification (STEP 9)
 
