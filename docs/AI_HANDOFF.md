@@ -138,7 +138,33 @@ surface:
 - A `PVC` for `/data` (AgentOS state) and, if bundled, `litellm-data`.
 - Reuse the existing `Dockerfile` image (no code change expected — this is a packaging step).
 
-Confirm the target cluster + registry before starting STEP 10.
+### Discovery results (2026-10-10 — read before implementing)
+
+A read-only discovery pass on server 52 found **no existing Kubernetes cluster and no existing
+internal Docker registry**. Consequences for the plan:
+
+- **No k8s on 52** (and no reachable one on 53/117): `kubectl`/`helm`/`k3s` not installed, no
+  `~/.kube/`, no k8s systemd service, 6443/6444 closed on 53/117. The only container runtime is
+  `containerd` backing Docker. → STEP 10 must either (a) build the chart now + a local single-node
+  test cluster (e.g. `k3s` on 52, pending disk decision), or (b) target a cluster to be provisioned.
+- **No internal registry**: no Harbor/registry container; **GitLab CE 16.3.9 `container_registry`
+  feature is OFF** (default off in CE 16; enabling it requires `feature_flags enable
+  container_registry` + `gitlab-ctl reconfigure`, an admin-side change) — this is the cleanest
+  internal option (`registry.git.ai.ismc.ir`-style URL) if the user wants it. The DNS names
+  `harbor.ai.ismc.ir` / `registry.ai.ismc.ir` resolve (80.191.92.189) but serve **no** registry
+  (aPanel/Next.js vhost, 308 redirect). 53:8083 is OpenCSG (a model hub SPA, **not** OCI).
+- **52 CAN reach public registries** (`registry-1.docker.io`, `ghcr.io`, `quay.io` :443 open;
+  `docker pull` OK) → pushing to ghcr/docker.io is technically possible (needs an account/token),
+  but public hosting of internal app images is a user decision.
+- **Image** `ai-product-orchestrator:latest` is **~546 MB**; 52 disk is **~90% full (52G free)** —
+  pushing 1–2 more images is fine, but a large local registry/cluster would need the disk
+  cleanup/rotation watch item addressed first.
+- **Suggested image naming** (for whichever registry):
+  `<registry>/ai-product-orchestrator:0.3.0` and `<registry>/litellm-sidecar:<pinned>` (or reuse
+  the official LiteLLM image for the sidecar — preferred, no build needed).
+
+**Decision needed before implementation: (1) target cluster (provision k3s on 52 vs external),
+(2) registry (enable GitLab CE registry vs public ghcr vs a new local registry).**
 
 ## 9. Where to read next
 
