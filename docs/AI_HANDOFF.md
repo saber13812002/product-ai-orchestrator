@@ -4,7 +4,7 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: 2026-10-10 · Latest release: **v0.3.0** · Test suite: **30 tests** (hermetic) · CI chain: **green** (runner #1)._
+_Last updated: 2026-10-11 · Latest release: **v0.3.0** · Test suite: **30 tests** (hermetic) · CI chain: **green** (runner #1) · **Golden Rule (tests + observability) codified in STEP 9.6**._
 
 ## 1. What this is
 
@@ -95,6 +95,7 @@ Full details: [LITELLM.md](LITELLM.md).
 | **8** | Gap-filling **refine pass** (`workflow.run refine`) — targeted 2nd pass re-runs only the gate's gapful docs. Live 74→82. Released **v0.2.0**. | ✅ |
 | **9** | **LiteLLM deployment modes** — External (default) + Bundled sidecar; single `resolve_endpoint()`; sidecar `litellm/` with an env-rendering entrypoint (the official image doesn't expand `${VAR}` in a mounted config); health-gated startup; `workflow.run endpoint` CLI; 9 new tests (suite 30). Released **v0.3.0**. | ✅ |
 | **9.5** | **CI runner repair** — the user-mode runner `aio-server52` (#5) failed every job at `prepare environment: exit status 1` and was stealing (load-balancing) jobs away from the healthy root runner #1, leaving the pipeline red and 7779 stuck on v0.2.0. Stopped #5 + deactivated it in GitLab (`active=false`); all `server52` jobs now run on #1. Real green pipeline for `main` @ v0.3.0 → 7779 auto-deployed to v0.3.0. | ✅ (this session) |
+| **9.6** | **Testing & Observability Baseline + the Golden Rule.** Codified the permanent rule — *nothing is complete without BOTH tests AND an observable/traceable execution path* — into the repo: new `docs/TESTING.md` (Test Matrix + Definition of Done), `docs/OBSERVABILITY.md` (the 14-point standard + honest gap list), plus `TRACING`/`LOGGING`/`HEALTHCHECKS`/`METRICS`/`GRAFANA`/`CI_CD`. README links all of them; the rule is stated up top. **Baseline finding (honest):** we have `run_id` + an honest per-call token ledger + per-step state persistence + a CLI run-report + 30 hermetic tests — but **no `trace_id`, no `logging` module (everything is `print()`), no duration/latency, no `/metrics`, no Prometheus/Grafana, and health is process-alive only.** No code changes in this step (measure first, build second). | ✅ (this session) |
 
 ## 6. Latest tests & verification (STEP 9)
 
@@ -124,6 +125,36 @@ Full details: [LITELLM.md](LITELLM.md).
   container — that's intended and fine; just be aware 7779 briefly restarts.
 - **52 disk** was a watch item (~74%); the GitLab log bleed (~0.3–0.6 GB/day, no rotation) is
   still worth rotating. See the sibling memory `server52-disk-state`.
+
+## 7. Observability baseline (STEP 9.6 — the Golden Rule)
+
+**The rule (now permanent for this repo and all future projects):** no module, agent, API,
+pipeline, or deployment is **complete** without **both** tests **and** an observable, traceable
+execution path. Full 14-point standard → [OBSERVABILITY.md](OBSERVABILITY.md); the Test Matrix +
+Definition of Done → [TESTING.md](TESTING.md).
+
+**What we already have (genuine):**
+- `run_id` (`YYYYMMDD-HHMMSS-<6hex>`) keys every run's `state.json` + artifacts.
+- A **honest per-call token ledger** (`LlmCall`: model, role, in/out/reasoning tokens, status,
+  is_stub) — a real metric source, currently stored only in `state.json`.
+- Per-step state persistence (run reconstructable from disk) + a CLI **run report**
+  (summary, steps, per-model tokens, quality scores, errors, final status).
+- 30 hermetic tests (no LLM/network/key); Pydantic schemas as data contracts; AgentOS OpenAPI.
+- Two process-alive health endpoints: AgentOS `/health`, LiteLLM `/health/liveliness`.
+
+**What's missing (the build — STEP 9.7 → 10):**
+- ❌ `trace_id` + cross-process propagation (AgentOS HTTP run vs CLI run not linked).
+- ❌ a `logging` module / structured per-step events (everything is `print()`).
+- ❌ duration/latency per step and per call (so no P50/P95/P99).
+- ❌ a `/metrics` (Prometheus) endpoint; ❌ Prometheus + Grafana (incl. the Workflow Dashboard).
+- 🟡 health is process-alive only — no dependency-aware `/ready` (LiteLLM/DB probe).
+- ❌ CI Lint/Contract/Security stages and a post-deploy smoke run (current CI = test→deploy+health-wait, green & reliable).
+
+**Sequencing:** the baseline (this step) is *documentation + matrix only* — no code. The build is
+**STEP 9.7** (`workflow/observability.py`: `trace_id` + structured logging + `duration_ms`;
+`/metrics`; dependency-aware `/ready`), then **STEP 10 (Helm/K8s)** ships readiness/liveness
+probes, a Prometheus ServiceMonitor, Grafana dashboards, resource metrics, and a post-deploy
+smoke **from the start**.
 
 ## 8. Next — STEP 10 (Helm / Kubernetes)
 
@@ -175,6 +206,10 @@ internal Docker registry**. Consequences for the plan:
 - **[CONFIGURATION.md](CONFIGURATION.md)** — the full environment-variable reference.
 - **[AGENTS.md](../AGENTS.md)** — commands, CI/CD gotchas, hard rules.
 - **[RELEASES.md](RELEASES.md)** — changelog + how to cut a release.
+- **Golden Rule / observability (STEP 9.6):** [TESTING.md](TESTING.md) (matrix + DoD),
+  [OBSERVABILITY.md](OBSERVABILITY.md) (14-point standard + gap list), [TRACING.md](TRACING.md),
+  [LOGGING.md](LOGGING.md), [HEALTHCHECKS.md](HEALTHCHECKS.md), [METRICS.md](METRICS.md),
+  [GRAFANA.md](GRAFANA.md), [CI_CD.md](CI_CD.md).
 
 ## 10. Hard rules (carry these into every change)
 

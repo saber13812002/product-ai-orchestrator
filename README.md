@@ -9,6 +9,16 @@ observability, UI flows) the document gate names. All through a single **LiteLLM
 
 Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
+> ## 🏅 The Golden Rule — tests **and** observability
+> **Nothing in this repo is "complete" without BOTH tests AND an observable, traceable execution
+> path.** "Code written" is not done. This is the permanent Definition of Done for every module,
+> agent, API, pipeline, and deployment here (and the standard STEP 10 ships from the start):
+> per-step tests, a global `run_id`/`trace_id`, structured logs, health checks, metrics,
+> Prometheus + Grafana, and a per-run report.
+>
+> - 🧪 **Testing & Test Matrix** → [docs/TESTING.md](docs/TESTING.md)
+> - 👁️ **Observability standard (14 points)** → [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)
+
 ## Status
 
 | | |
@@ -62,6 +72,11 @@ Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 - 🤖 **Agent Design** — [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md)
 - 🛠️ **Developer Workflow** — [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - 📦 **Releases** — [docs/RELEASES.md](docs/RELEASES.md)
+- 🧪 **Testing & Test Matrix (Golden Rule)** — [docs/TESTING.md](docs/TESTING.md)
+- 👁️ **Observability (14-point standard)** — [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)
+- 🧭 **Tracing** — [docs/TRACING.md](docs/TRACING.md) · ✍️ **Logging** — [docs/LOGGING.md](docs/LOGGING.md)
+- ❤️ **Health Checks** — [docs/HEALTHCHECKS.md](docs/HEALTHCHECKS.md) · 📊 **Metrics** — [docs/METRICS.md](docs/METRICS.md)
+- 📈 **Grafana** — [docs/GRAFANA.md](docs/GRAFANA.md) · 🔄 **CI/CD** — [docs/CI_CD.md](docs/CI_CD.md)
 
 ## Project Overview
 
