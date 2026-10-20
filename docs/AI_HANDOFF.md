@@ -4,7 +4,11 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: 2026-10-11 · Latest release: **v0.3.0** · Test suite: **30 tests** (hermetic) · CI chain: **green** (runner #1) · **Golden Rule (tests + observability) codified in STEP 9.6**._
+_Last updated: **2026-10-20 (full handover audit)** · Latest release: **v0.3.0** · Test suite:
+**30 tests** (hermetic, re-verified green 2026-10-20) · CI chain: last known green at v0.3.0
+(2026-10-10; pipeline list itself not re-queryable this audit — see §7) · **Golden Rule (tests +
+observability) codified in STEP 9.6** · **Full verified audit: [PROJECT_STATUS.md](PROJECT_STATUS.md)** ·
+**Work order: [ROADMAP.md](ROADMAP.md)** · **Test map: [TEST_MATRIX.md](TEST_MATRIX.md)**._
 
 ## 1. What this is
 
@@ -197,6 +201,41 @@ internal Docker registry**. Consequences for the plan:
 **Decision needed before implementation: (1) target cluster (provision k3s on 52 vs external),
 (2) registry (enable GitLab CE registry vs public ghcr vs a new local registry).**
 
+## 8a. 2026-10-20 handover audit — what changed in the picture
+
+A full, evidence-based audit (live server checks, no code changes) was performed on 2026-10-20.
+Full detail: [PROJECT_STATUS.md](PROJECT_STATUS.md). Headlines:
+
+- **Repo, deploy, and tests all re-confirmed real:** local `main` = remote `HEAD` = `3f4fe2e`;
+  7779's deployed source is **byte-identical (md5)** to git `main`; `agno-agentos` (7777, prod)
+  and `agno-agentos-repo` (7779, deploy target) both healthy; **30/30 hermetic tests pass**
+  re-run in the deployed container; live gateway `:4000` + all three role models
+  (`qwen38-nothinking`/`qwen38`/`qwen38-sglang`) re-verified, backed by `Qwen3.8-27B-FP8` on 53.
+- **A real full+enrich run exists and was inspected** (prod, run `20261006-141735-97dda8`):
+  40 real LLM calls, **155,998 real tokens**, 3 distinct models, 0 errors, final design score
+  **71**, document completeness **79/100**, with the gate **naming** the specific gaps
+  (missing DDL, missing exact OpenAPI, weak observability/UI flows). This is the single most
+  important artifact for calibrating what "Approved Technical Documents" still requires.
+- **The quality gates are NOT being met by the pipeline as configured** (71 < 85 design gate,
+  79 < 80 document gate). This is consistent with the old STEP 4 "model-bound ceiling" note —
+  it was never going to close with another loop iteration on the current fleet.
+- **The refine pass has no live-run evidence in storage** (all prod runs are pre-refine, Oct
+  5–6). The STEP 8 "74→82" figure is a documented claim, not re-verified. **Do not treat the
+  refine pass as proven on a current gateway until TASK-11-1 is done.**
+- **7779 (deploy target) has an empty storage volume** — no runs have ever executed there, only
+  on 7777 (prod). Not a defect, but means "the deployed instance" and "the instance with
+  evidence" are different machines; keep that straight when reporting.
+- **GitLab CI pipeline list could not be re-queried** (no API token in
+  `/etc/gitlab-runner/config.toml`, none on the laptop). Treat "CI green today" as
+  last-known-good (v0.3.0, 2026-10-10), not re-verified — TASK-CI-1 fixes this.
+- **Nothing in the observability gap list (STEP 9.7) has been built since** — re-confirmed by
+  direct grep of `workflow/*.py`: no `trace_id`, no `logging` import, no `/metrics`.
+
+**Net: the machine is real, deployed, tested, and works — but the end goal
+("Approved Technical Documents") is not yet met, and the next real work is the observability
+build (STEP 9.7) plus one evidenced live refine run (STEP 11), in that order. Full task list
+with acceptance criteria: [ROADMAP.md](ROADMAP.md).**
+
 ## 9. Where to read next
 
 - **[LITELLM.md](LITELLM.md)** — the two deployment modes in depth.
@@ -222,3 +261,72 @@ internal Docker registry**. Consequences for the plan:
 6. **Never recreate the production (7777) or deploy-target (7779) instances in tests** — use a
    separate compose **project** (`docker compose -p myproj ...`), not just a different
    `container_name`/port.
+
+## 11. Next-chat checkpoint prompt (self-contained)
+
+Copy-paste this into a new session to hand the project off:
+
+```
+PROJECT HANDOFF — AI Product Orchestrator (start here, read docs/AI_HANDOFF.md + docs/PROJECT_STATUS.md first)
+
+REPO: https://git.ai.ismc.ir/common/website/ai-product-orchestrator
+  - git remote (works from laptop + server 52): http://172.20.1.52:81/common/website/ai-product-orchestrator.git
+  - Current commit on main: 3f4fe2e — verified identical to remote HEAD on 2026-10-20. Do not assume
+    you're starting from a clean slate: a full evidence-based audit was completed 2026-10-20 and is
+    recorded in docs/PROJECT_STATUS.md, docs/ROADMAP.md, docs/TEST_MATRIX.md.
+  - Releases: v0.1.0 (STEP 7), v0.2.0 (STEP 8), v0.3.0 (STEP 9) — v0.3.0 is current.
+
+SERVERS:
+  - 52 (172.20.1.52): GitLab CE, CI runner (root, #1 "AI-TOOLS"), two AgentOS instances:
+      * agno-agentos  -> port 7777, PRODUCTION, /home/saber/agentos/ — NOT managed by this repo, never touch
+      * agno-agentos-repo -> port 7779, CI deploy target, /home/saber/saberprojects/ai-product-orchestrator
+    Verified 2026-10-20: both healthy; 7779 source is byte-identical (md5) to git main @ 3f4fe2e.
+  - 53 (172.20.1.53): model backends — Qwen3.8-27B-FP8 vLLM on :8000 (nothinking) and :8001 (sglang).
+    Reachable from 52. SSH: `ssh -p 22 saber@172.20.1.52` (port 22, NOT the s52 alias/2222 which is aPanel's
+    separate instance); 53 via `ssh jump53`.
+  - LiteLLM external gateway (the one AgentOS uses): container learn-lite-llm-litellm-1 on 52, :4000,
+    17 models registered. LITELLM_BASE_URL=http://172.20.1.52:4000/v1. Never print its master key.
+    NOTE: do not confuse with litellm-personal (separate project, :4101) — that is a different LiteLLM
+    instance used by other ismc projects, not this one.
+
+MODEL ROUTING (verified working 2026-10-20):
+  fast=qwen38-nothinking (ALL structured/judge work — the thinking models below return empty content,
+  confirmed live, so this split is load-bearing, not a preference)
+  deep=qwen38, alt=qwen38-sglang (free-text tasks only, satisfies "≥3 distinct models")
+
+WHAT WORKS (evidence, 2026-10-20):
+  - 30/30 hermetic tests pass (no LLM/network/key) — re-run inside the deployed container.
+  - Real full+enrich pipeline run on prod (run 20261006-141735-97dda8): completed, 40 real LLM calls,
+    155,998 real tokens, 3 models, 0 errors. Final design score 71, document completeness 79/100.
+  - Docker compose deploys both LiteLLM modes (external default, bundled sidecar optional profile).
+
+WHAT IS NOT TRUE YET (do not let old reports convince you otherwise):
+  - Quality gates are NOT met: design gate needs 85 (we're at 71), document-completeness gate needs 80
+    (we're at 79). The refine pass (which exists specifically to close named gaps: DDL, OpenAPI,
+    observability, UI flows) has NO live-run evidence in storage — the STEP 8 "74→82" number is
+    documented, not re-verified.
+  - No trace_id, no structured logging, no /metrics, no Prometheus/Grafana wired to THIS app
+    (STEP 9.7, entirely unbuilt — the Golden Rule's observability half).
+  - CI pipeline "green" was last verified 2026-10-10 (v0.3.0); it could NOT be re-queried 2026-10-20
+    (no GitLab API token anywhere we looked). Do not claim CI is green today without re-checking.
+
+OPEN DECISIONS (user's call, do not decide unilaterally):
+  1. Is a stronger/newer model backend in scope on 53, or are the 85/80 gate thresholds to be
+     reconsidered as a business decision? (Affects STEP 11.)
+  2. STEP 10 (Helm/K8s): target cluster? (52 has ~90% disk full — a k3s install there is a real
+     disk decision) and image registry? (GitLab CE container_registry feature is OFF, or public
+     ghcr/docker.io.)
+
+FIRST TASKS (in order, see docs/ROADMAP.md for acceptance criteria):
+  TASK-CI-1 (quick): get a GitLab API token for this project so pipeline status is re-queryable.
+  TASK-9.7-1..3: build workflow/observability.py (trace_id + structured logging + /metrics + /ready),
+    all hermetic-testable, one branch feat/observability-baseline.
+  TASK-11-1: ONE bounded live refine-pass run on an isolated compose project (never 7777/7779),
+    capture before/after completeness scores as evidence.
+  Then TASK-9.7-4 (Prometheus job + Grafana dashboard on 52, reusing the existing observability stack).
+
+HARD RULES (repeat from AGENTS.md — non-negotiable):
+  No secrets in repo. CI stays hermetic (no LLM/network/keys in tests). Structured output only from
+  `fast`. LF line endings (.gitattributes). Never recreate 7777 or 7779 in a test — separate compose
+  project name, not just a new port. No full/paid workflow runs during an audit or docs session.
+```
