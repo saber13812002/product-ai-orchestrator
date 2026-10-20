@@ -114,7 +114,7 @@ not yet achieved, and we have no evidence the refine pass works on a real, curre
 | Backends on 53 | `:8000/v1/models`, `:8001/v1/models` | both 200, both `Qwen3.8-27B-FP8` |
 | Hermetic tests | `uv run --with pytest python -m pytest workflow/tests -q` inside `agno-agentos-repo` | **30 passed in 0.83s** |
 | Real E2E run | `state.json` of run `20261006-141735-97dda8` (prod volume) | status `completed`, 40 real calls, 155,998 real tokens, 3 models, 0 non-ok calls, final_score 71, doc completeness 79, gaps named |
-| GitLab CI pipeline list | attempted GitLab API with runner token | **no token found in `/etc/gitlab-runner/config.toml`** → pipeline list/status could not be independently re-queried; treated as UNVERIFIED today (last known green: v0.3.0, 2026-10-10) |
+| GitLab CI pipeline list | attempted GitLab API with runner token, then (post-audit) pushed the docs-only commit `378ea5b` itself | **no token found** → could not re-query the pipeline *list* directly, **but the push itself triggered a full green cycle, observed live at 12:55 UTC**: test job passed (30/30), image rebuilt, `agno-agentos-repo` recreated + healthy, new docs file present on the deploy target. CI is therefore green **today**, re-verified by side effect. The *durable, queryable* pipeline-status check is still missing → TASK-CI-1. |
 | Storage on 7779 deploy target | `find` in compose volume | **empty** — no runs have ever been executed on the 7779/deploy-target instance (only on prod 7777); noted, not a defect |
 | Secrets | none printed at any point; gateway key read into a shell variable only, never echoed | ✅ |
 
@@ -122,7 +122,9 @@ not yet achieved, and we have no evidence the refine pass works on a real, curre
 
 **Agree (re-confirmed live):** repo/CI/deploy pipeline structure, 30-test hermetic suite, dual
 LiteLLM modes, dual 7777/7779 instances, "thinking models can't emit structured JSON" (just
-reproduced live: `qwen38` returned `content: None`, 72 reasoning tokens on a 15-token request).
+reproduced live: `qwen38` returned `content: None`, 72 reasoning tokens on a 15-token request),
+and — after the docs-only push of this very audit — **the CI→deploy pipeline end-to-end is green
+right now** (pipeline triggered by commit `378ea5b`, test job passed, 7779 rebuilt + healthy).
 
 **Diverge / could not re-verify:**
 - **Latest CI pipeline green** — last documented green is 2026-10-10 (v0.3.0). No GitLab API
