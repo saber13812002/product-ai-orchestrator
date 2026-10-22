@@ -4,11 +4,50 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: **2026-10-20 (full handover audit)** · Latest release: **v0.3.0** · Test suite:
-**30 tests** (hermetic, re-verified green 2026-10-20) · CI chain: last known green at v0.3.0
-(2026-10-10; pipeline list itself not re-queryable this audit — see §7) · **Golden Rule (tests +
-observability) codified in STEP 9.6** · **Full verified audit: [PROJECT_STATUS.md](PROJECT_STATUS.md)** ·
-**Work order: [ROADMAP.md](ROADMAP.md)** · **Test map: [TEST_MATRIX.md](TEST_MATRIX.md)**._
+_Last updated: **2026-10-21 (re-audit, live re-verification — state unchanged since 2026-10-20)** ·
+Latest release: **v0.3.0** · `main` = `299f1a3` (synced, clean) · Test suite: **30 tests**
+(hermetic, **re-run green in-container during the 2026-10-21 audit**, 0.83s) · Both instances
+healthy (7777 prod / 7779 deploy target), deploy target **byte-identical to `main`** (md5) ·
+1 real model call re-verified (19 tokens) · CI: last verified green at v0.3.0; **pipeline list
+still not queryable (no GitLab API token → TASK-CI-1)**; runner logged 502s at 06:52 UTC
+2026-10-21 around the gitlab stack's ~07:00 UTC restart — to check in TASK-CI-1 ·
+**Golden Rule (tests + observability) codified in STEP 9.6** ·
+**Full verified audit: [PROJECT_STATUS.md](PROJECT_STATUS.md)** ·
+**2026-10-21 audit bundle (4 reports): [../audit_2026_10_21/](../audit_2026_10_21/)** ·
+**Work order: [ROADMAP.md](ROADMAP.md)** · **Test map: [TEST_MATRIX.md](TEST_MATRIX.md)** ·
+**Living test/observability checklist: [PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md](PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md)**._
+
+### 0. 2026-10-21 re-audit (what changed / what didn't)
+
+**State is unchanged** from the 2026-10-20 audit — everything below was re-verified live on
+2026-10-21 (evidence, not claims):
+
+| Item | 2026-10-20 | 2026-10-21 re-check |
+|---|---|---|
+| `main` / deploy target | `299f1a3` / byte-identical | ✅ same — md5 of 3 files = `git show main` |
+| 7777 / 7779 | both healthy | ✅ both healthy (up ~11h each) |
+| 30 hermetic tests | green | ✅ **re-run in-container: 30 passed in 0.83s** |
+| Gateway :4000 + model call | live, 1 call | ✅ liveliness 200; 1 call: `qwen38-nothinking` → "OK", **19 tokens** |
+| Refine pass live evidence | none | ❌ still none (storage unchanged) |
+| Observability in code | 0% (grep) | ✅ still 0% (grep re-run) |
+| GitLab pipeline list | not queryable | ❌ still not queryable (no token) |
+
+**New findings from the 2026-10-21 audit:**
+1. **`/ready` → 404** on 7779 (endpoint not built — TASK-9.7-3).
+2. **`/metrics` exists but is Agno's built-in JSON endpoint** (`{"metrics":[],"updated_at":null}`),
+   **not Prometheus** — TASK-9.7-2 must pick a separate path (e.g. `/metrics/prometheus`) or
+   replace it; the name collision is documented in the audit's test report.
+3. **GitLab stack (gitlab/postgres/redis) restarted ~07:00 UTC 2026-10-21** (uptime ~11h at audit
+   time); runner logged `502 Bad Gateway` on `jobs/request` at 06:52 UTC — consistent with the
+   restart window; last deploy (the `299f1a3` docs push) succeeded 11h earlier, so CI is believed
+   intact, **to be confirmed in TASK-CI-1**.
+4. **No custom settings form / admin UI exists** — the only UI is Agno's standard one. Whether a
+   settings form is in scope is an open user decision (stage 4 of the audit roadmap).
+
+**Where the 2026-10-21 audit bundle lives:** repo-root [`audit_2026_10_21/`](../audit_2026_10_21/)
+— `PROJECT_STATUS_REPORT.md` (executive dashboard + 12 sections), `PROJECT_ARCHITECTURE.md`
+(mermaid + request flow), `PROJECT_TEST_REPORT.md` (17 tests, 12 PASS / 2 SKIPPED / 1 BLOCKED),
+`PROJECT_ISSUES_AND_ROADMAP.md` (11 issues, 6-stage roadmap, 6 open user decisions).
 
 ## 1. What this is
 
