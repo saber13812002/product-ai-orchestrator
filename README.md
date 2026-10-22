@@ -10,15 +10,26 @@ observability, UI flows) the document gate names. All through a single **LiteLLM
 Built on [Agno AgentOS](https://github.com/agno-agi/agno).
 
 > ## 📍 Where the project actually stands (read these first)
+>
+> **Full technical audit — 2026-10-21 (live re-verification, evidence-based):**
+> - 📊 **Project Status Report** → [audit_2026_10_21/PROJECT_STATUS_REPORT.md](audit_2026_10_21/PROJECT_STATUS_REPORT.md)
+> - 🏛️ **Architecture Report** → [audit_2026_10_21/PROJECT_ARCHITECTURE.md](audit_2026_10_21/PROJECT_ARCHITECTURE.md)
+> - 🧪 **Test Report** → [audit_2026_10_21/PROJECT_TEST_REPORT.md](audit_2026_10_21/PROJECT_TEST_REPORT.md)
+> - 🐛 **Issues & Roadmap** → [audit_2026_10_21/PROJECT_ISSUES_AND_ROADMAP.md](audit_2026_10_21/PROJECT_ISSUES_AND_ROADMAP.md)
+> - ✅ **Test & Observability Checklist (living)** → [docs/PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md](docs/PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md)
+>
+> Standing reference (from the 2026-10-20 handover audit):
 > - ✅ **Project Status — verified 2026-10-20 audit** → [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
 > - 🗺️ **Roadmap — remaining tasks, priorities, dependencies** → [docs/ROADMAP.md](docs/ROADMAP.md)
 > - 🤖 **AI Handoff / next-chat checkpoint** → [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md)
 > - 🧪 **Test Matrix (per-module coverage, gaps stated plainly)** → [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md)
 >
-> Current state in one line: the pipeline is real, deployed, and tested (30 hermetic tests green,
-> re-verified live 2026-10-20), but the two quality gates (design ≥85, doc-completeness ≥80) are
-> **not yet met** (latest real run: 71 / 79) and the observability build (trace_id / structured
-> logging / `/metrics` / Prometheus+Grafana) is **not started**. Details + evidence: the four links above.
+> Current state in one line (re-verified live 2026-10-21): the pipeline is real, deployed, and
+> tested (30 hermetic tests green, re-run in-container during the 2026-10-21 audit), both
+> instances healthy, deploy target byte-identical to `main` — but the two quality gates
+> (design ≥85, doc-completeness ≥80) are **not yet met** (latest real run: 71 / 79) and the
+> observability build (trace_id / structured logging / `/metrics` / Prometheus+Grafana) is
+> **not started**. Details + evidence: the four audit links above.
 
 > ## 🏅 The Golden Rule — tests **and** observability
 > **Nothing in this repo is "complete" without BOTH tests AND an observable, traceable execution
