@@ -137,8 +137,8 @@ address and **every job dies in `Getting source`** with
 needs:
 
 ```toml
-  url       = "http://172.20.1.52:81"
-  clone_url = "http://172.20.1.52:81"
+  url       = "http://172.30.0.133:81"
+  clone_url = "http://172.30.0.133:81"
 ```
 
 after which `sudo gitlab-runner verify` / `gitlab-runner verify` and (for the systemd runner)

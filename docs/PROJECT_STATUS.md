@@ -17,7 +17,7 @@ models, 0 errors**, final design score **71** and document completeness **79/100
 quality/document gates (thresholds 85/80) are **not being met**, and the gap pass has **no
 evidence of ever being run live** (no post-80 runs exist in storage). The hermetic test suite
 (**30 tests**) re-ran green in the deployed container on 2026-10-20; the live gateway
-(`172.20.1.52:4000`) and all three role models (`qwen38-nothinking`/`qwen38`/`qwen38-sglang`)
+(`172.30.0.133:4000`) and all three role models (`qwen38-nothinking`/`qwen38`/`qwen38-sglang`)
 were re-verified reachable on 53 (`Qwen3.8-27B-FP8`). Remaining work is concentrated in two
 areas: **observability build-out** (trace_id, structured logging, `/metrics`, Prometheus/Grafana —
 the STEP 9.6 "Golden Rule" baseline) and **hitting the quality gates** (score 71 vs 85,
@@ -104,11 +104,11 @@ not yet achieved, and we have no evidence the refine pass works on a real, curre
 
 | Check | Method | Result |
 |---|---|---|
-| Repo identity | `git log`/`git ls-remote origin HEAD` locally + remote `http://172.20.1.52:81/...` | local `main` = remote `HEAD` = `3f4fe2e`; clean tree |
+| Repo identity | `git log`/`git ls-remote origin HEAD` locally + remote `http://172.30.0.133:81/...` | local `main` = remote `HEAD` = `3f4fe2e`; clean tree |
 | Deploy target in sync | `md5sum` of `workflow/engine.py`, `workflow/config.py`, `README.md` on 52 vs local main | **identical** — 7779 is running exactly git `main` |
 | Containers | `docker ps` on 52 | `agno-agentos` (7777, prod, up 2w, healthy), `agno-agentos-repo` (7779, deploy target, up 9d, healthy) |
 | Health | `curl :7777/health`, `:7779/health` | both `{"status":"ok"}` |
-| Resolved endpoint (7779) | `workflow.run endpoint` | mode `external`, `http://172.20.1.52:4000/v1`, key configured (never printed) |
+| Resolved endpoint (7779) | `workflow.run endpoint` | mode `external`, `http://172.30.0.133:4000/v1`, key configured (never printed) |
 | Gateway | `:4000/health/liveliness` + `/v1/models` (17 models listed) | up |
 | Model smoke (1 call each, ≤15 tokens) | real chat completion via gateway | `qwen38-nothinking` → "OK" (19 tok); `qwen38`/`qwen38-sglang` → empty content, 72 tok (thinking budget consumed — **expected, documented behavior**, why structured work runs on `fast` only) |
 | Backends on 53 | `:8000/v1/models`, `:8001/v1/models` | both 200, both `Qwen3.8-27B-FP8` |

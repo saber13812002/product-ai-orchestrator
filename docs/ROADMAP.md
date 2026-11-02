@@ -45,7 +45,7 @@
 ### TASK-9.7-4 — Prometheus scrape job + Grafana dashboard (server 52)  (P1)
 - **Depends on:** TASK-9.7-1, TASK-9.7-2 (metrics must exist and be deployed first)
 - **Files (on 52, not this repo's code):** `prometheus.yml` (new job `agentos-7779`, target
-  `172.20.1.52:7779`); new Grafana dashboard JSON (workflow dashboard: runs, tokens by model,
+  `172.30.0.133:7779`); new Grafana dashboard JSON (workflow dashboard: runs, tokens by model,
   step latency P50/P95, gate pass/fail rate)
 - **Acceptance criteria:** `promtool check config` clean; `up{job="agentos-7779"} == 1`; dashboard
   renders real values after one hermetic + one real run

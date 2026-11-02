@@ -4,22 +4,34 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: **2026-11-02 (STEP 1 baseline finalization — see §0a; ⚠️ server 52 was DOWN at
-audit time, so all 52-side state is UNVERIFIED this round)** ·
+_Last updated: **2026-11-02 (STEP 1 Infrastructure Reconciliation — see §0a; ⚠️ server 52 was
+migrated to 133, so all 52-side addresses are now 172.30.0.133; remote state re-verified on 133)** ·
+Previous: 2026-11-02 morning (STEP 1 baseline finalization — 52 was DOWN at that audit time) ·
 Previous: 2026-10-21 (re-audit, live re-verification — state unchanged since 2026-10-20) ·
-Latest release: **v0.3.0** · `main` = `299f1a3` (local; **remote HEAD unverified — 52 down**) ·
+Latest release: **v0.3.0** · `main` = `299f1a3` (local; **remote HEAD re-verified on 133 at audit time**) ·
 Test suite: **30 tests** (hermetic) · **Golden Rule (tests + observability) codified in STEP 9.6** ·
 **Full verified audit: [PROJECT_STATUS.md](PROJECT_STATUS.md)** ·
 **2026-10-21 audit bundle (4 reports): [../audit_2026_10_21/](../audit_2026_10_21/)** ·
 **Work order: [ROADMAP.md](ROADMAP.md)** · **Test map: [TEST_MATRIX.md](TEST_MATRIX.md)** ·
 **Living test/observability checklist: [PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md](PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md)**._
 
-### 0a. 2026-11-02 — STEP 1: project baseline finalization (decision history / done / remaining)
+### 0a. 2026-11-02 — STEP 1: project baseline finalization → Infrastructure Reconciliation
+
+**Status: the "52 down" finding recorded below was SUPERSEDED later the same day.** The server
+previously called "52" (172.20.1.52) was **migrated to 133** (172.30.0.133, hostname AI-TOOLS)
+during the day; 133 is **UP** and now hosts the entire 52 infrastructure (GitLab :81, AgentOS
+:7777/:7779, LiteLLM :4000, CI runners). All operational addresses in this repo have been updated
+from `172.20.1.52` to `172.30.0.133` (see [SERVER_TOPOLOGY.md](SERVER_TOPOLOGY.md) for the full
+address map). The historical finding below is preserved verbatim (Category B — migration note
+added) but is no longer the current state.
+
+---
 
 This section is the authoritative record for the "prepare to start Observability (STEP 2) + first
 real product Workflow run" baseline pass. **Per the Golden Rule, every claim below was re-verified
 from the real Git and server state — nothing was assumed unchanged** (and that check surfaced two
-material changes: the local repo moved, and server 52 went down).
+material changes: the local repo moved, and server 52 went down — later found to be the 52→133
+migration, see above).
 
 **Decision history (who decided what, and why):**
 
@@ -30,7 +42,8 @@ material changes: the local repo moved, and server 52 went down).
 | 2026-10-21 | Do **not** merge MR !1 without explicit user approval | User: "بدون تأیید صریح من Merge نکن" |
 | 2026-11-02 | Baseline finalization must verify **real** Git + server state, not assume it | User STEP 1: "فرض نکن هنوز تغییر نکرده‌اند" |
 | 2026-11-02 | **No merge, no direct main commit, no Production change, 7777/7779 untouched, no expensive LLM test** | User STEP 1 hard constraints (still in force) |
-| 2026-11-02 | **Block STEP 2 (Observability) on user restoring server 52** | 52 is down → cannot push, merge, run full CI, or verify deploy; doing STEP 2 blind violates Golden Rule |
+| 2026-11-02 (am) | **Block STEP 2 (Observability) on user restoring server 52** | 52 was unreachable → cannot push, merge, run full CI, or verify deploy; doing STEP 2 blind violates Golden Rule. **SUPERSEDED same day (pm):** 52 migrated to 133 (172.30.0.133), which is UP — see §0a header + SERVER_TOPOLOGY.md. |
+| 2026-11-02 (pm) | **52→133 migration confirmed; STEP 1 = reconcile all 52 refs to 133, update runner addresses, document topology** | 133 hosts all 52 infra (GitLab, AgentOS, LiteLLM, runners). Both runners still point to dead `http://172.20.1.52:81` → CI broken until re-pointed. |
 
 **What was DONE and verified this session (2026-11-02) — with evidence:**
 
@@ -47,28 +60,33 @@ material changes: the local repo moved, and server 52 went down).
 | 9 | Doc cross-links (docs branch) | `grep` over README/AGENTS/AI_HANDOFF | **All 4 audit reports + Roadmap + Test Matrix + living checklist linked** from README, AI_HANDOFF, and (as §9 refs) — consistent. |
 | 10 | CI deploy blast-radius | read `.gitlab-ci.yml` | `deploy` runs **only** on `main` / a tag / manual web trigger — **never from an MR or the docs branch**. So **merging MR !1 will rebuild+restart 7779**; an MR pipeline only runs the `test` stage. |
 
-**Server 52 status (the blocker):** at 2026-11-02 ~13:26–13:35 UTC, **52 (172.20.1.52) is
-completely unreachable** — SSH :22 and Git :81 both time out from the laptop, **and** from 53
-(which is itself up: `ssh jump53` OK). 53 also reports **no route to 52** on :22/:81/:4000/:7777/
-:7779/:9090. This is a network/host outage on 52, not a laptop problem. **Consequently, none of
-this could be verified today:** live remote `HEAD`, MR !1 existence/state, pipeline status,
-7777/7779 health, the deploy target, or the md5 sync-vs-main check. **Everything 52-side is
-marked UNVERIFIED, not assumed green.**
+**Server 52 status (SUPERSEDED — was the blocker, now resolved):** at 2026-11-02 ~13:26–13:35 UTC,
+**52 (172.20.1.52) was completely unreachable** — SSH :22 and Git :81 both timed out from the
+laptop, **and** from 53 (which was itself up: `ssh jump53` OK). 53 also reported **no route to 52**
+on :22/:81/:4000/:7777/:7779/:9090. This was initially recorded as a network/host outage on 52.
+
+**What actually happened:** 52 was **migrated to 133** (172.30.0.133, hostname AI-TOOLS) during the
+day. 133 is **UP** and now hosts all the 52 infrastructure. As of the STEP 1 Infrastructure
+Reconciliation (later the same day), the following were **re-verified live on 133**: GitLab :81
+reachable, AgentOS 7777/7779 healthy (200), LiteLLM :4000 alive, CI runners present (but still
+pointing to the dead `http://172.20.1.52:81` — see runner audit in the STEP 1 report). **Everything
+52-side is now 133-side and reachable.** The old address `172.20.1.52` is dead; all operational
+references have been updated to `172.30.0.133`.
 
 **Remaining work (in order, to reach "ready for STEP 2 + first Workflow run"):**
 
-1. **Restore server 52 reachability** (user infra — power/network). Re-run: `git fetch`, MR !1 +
-   pipeline check (gitlab-rails), 7777/7779 `docker ps` + `/health`, deploy-target md5 vs main,
-   and the **full 30-test in-container** hermetic run.
+1. **Re-point CI runners from dead `http://172.20.1.52:81` to `http://172.30.0.133:81`** on 133
+   (both `aio-server52` #5 and `9router-ci-server52`). This is the **blocking item** for CI.
+   Requires backup + user approval (runners may be shared between projects).
 2. **User merges MR !1** (docs baseline → main). *Note #10: this triggers a 7779 rebuild — confirm
-   52 is stable + user accepts the 7779 restart before merging.*
+   133 is stable + user accepts the 7779 restart before merging.*
 3. **`feat/observability-baseline`** (STEP 2 / ROADMAP TASK-9.7-1…3): `workflow/observability.py`
    (trace_id + structured logging + duration_ms), independent Prometheus `/metrics` (separate path
    from Agno's JSON one), dependency-aware `/ready`, all hermetic-tested. Separate MR; no merge
    without approval.
 4. **TASK-11-1** — one bounded, isolated (never 7777/7779) live refine run with before/after
    evidence; **needs its own budget approval** (~210k-token cap).
-5. **TASK-9.7-4** — Prometheus job + Grafana dashboard on 52 (reuses the existing 52 stack).
+5. **TASK-9.7-4** — Prometheus job + Grafana dashboard on 133 (reuses the existing 133 stack).
 6. Open user decisions unchanged: model/threshold (85/80 gates) and Helm/K8s + registry (TASK-11-2,
    TASK-10-1).
 
@@ -118,7 +136,7 @@ flows). Every LLM call goes through **one LiteLLM gateway**, and the whole thing
 
 | Thing | Location |
 |---|---|
-| **Git repo** | `https://git.ai.ismc.ir/common/website/ai-product-orchestrator` (internal GitLab CE on server 52; git over `http://172.20.1.52:81`). Private. |
+| **Git repo** | `https://git.ai.ismc.ir/common/website/ai-product-orchestrator` (internal GitLab CE on server 133; git over `http://172.30.0.133:81`). Private. *(migrated from 52 on 2026-11-02)* |
 | **Laptop working tree** | `C:\Users\s.tabatabaei\Documents\saberprojects\server52and53\ai-product-orchestrator` |
 | **Deploy target (52)** | `/home/saber/saberprojects/ai-product-orchestrator` — container `agno-agentos-repo`, port **7779** (the CI deploy target). |
 | **Production (52)** | `/home/saber/agentos/` — container `agno-agentos`, port **7777**. **NOT managed by this repo — never touch it.** |
@@ -128,8 +146,8 @@ flows). Every LLM call goes through **one LiteLLM gateway**, and the whole thing
 
 | Server | What it runs | Reach |
 |---|---|---|
-| **52** (172.20.1.52) | GitLab, CI runners, the production + deploy AgentOS instances, and the **external LiteLLM gateway** (`:4000`). | SSH alias `s52` from the laptop. |
-| **53** (172.20.1.53) | The **Qwen3.8-27B model backends**: vLLM `:8000` (nothinking), vLLM `:8001` (sglang). These are what the external gateway and the bundled sidecar route to. | Via 52 (jump). |
+| **133** (172.30.0.133) | GitLab, CI runners, the production + deploy AgentOS instances, and the **external LiteLLM gateway** (`:4000`). *(was 52, migrated 2026-11-02)* | Direct SSH from VM: `saber@172.30.0.133`. |
+| **53** (172.20.1.53) | The **Qwen3.8-27B model backends**: vLLM `:8000` (nothinking), vLLM `:8001` (sglang). These are what the external gateway and the bundled sidecar route to. | Via 133 (jump). |
 | **117** | Unrelated AI services (BGE-M3 embeddings, Whisper) — **not** used by this orchestrator. | — |
 
 ## 3. Version & state
@@ -364,22 +382,23 @@ Copy-paste this into a new session to hand the project off:
 PROJECT HANDOFF — AI Product Orchestrator (start here, read docs/AI_HANDOFF.md + docs/PROJECT_STATUS.md first)
 
 REPO: https://git.ai.ismc.ir/common/website/ai-product-orchestrator
-  - git remote (works from laptop + server 52): http://172.20.1.52:81/common/website/ai-product-orchestrator.git
-  - Current commit on main: 3f4fe2e — verified identical to remote HEAD on 2026-10-20. Do not assume
-    you're starting from a clean slate: a full evidence-based audit was completed 2026-10-20 and is
-    recorded in docs/PROJECT_STATUS.md, docs/ROADMAP.md, docs/TEST_MATRIX.md.
+  - git remote (works from laptop + server 133): http://172.30.0.133:81/common/website/ai-product-orchestrator.git
+    (migrated from 52/172.20.1.52 on 2026-11-02; old address is dead)
+  - Current commit on main: 299f1a3. Do not assume you're starting from a clean slate: a full
+    evidence-based audit was completed 2026-10-20 and is recorded in docs/PROJECT_STATUS.md,
+    docs/ROADMAP.md, docs/TEST_MATRIX.md.
   - Releases: v0.1.0 (STEP 7), v0.2.0 (STEP 8), v0.3.0 (STEP 9) — v0.3.0 is current.
 
 SERVERS:
-  - 52 (172.20.1.52): GitLab CE, CI runner (root, #1 "AI-TOOLS"), two AgentOS instances:
+  - 133 (172.30.0.133, hostname AI-TOOLS): GitLab CE, CI runners, two AgentOS instances:
       * agno-agentos  -> port 7777, PRODUCTION, /home/saber/agentos/ — NOT managed by this repo, never touch
       * agno-agentos-repo -> port 7779, CI deploy target, /home/saber/saberprojects/ai-product-orchestrator
-    Verified 2026-10-20: both healthy; 7779 source is byte-identical (md5) to git main @ 3f4fe2e.
+    Migrated from 52 (172.20.1.52) on 2026-11-02. SSH: direct from VM: `saber@172.30.0.133`.
+    53 reachable from 133 via `ssh jump53`.
   - 53 (172.20.1.53): model backends — Qwen3.8-27B-FP8 vLLM on :8000 (nothinking) and :8001 (sglang).
-    Reachable from 52. SSH: `ssh -p 22 saber@172.20.1.52` (port 22, NOT the s52 alias/2222 which is aPanel's
-    separate instance); 53 via `ssh jump53`.
-  - LiteLLM external gateway (the one AgentOS uses): container learn-lite-llm-litellm-1 on 52, :4000,
-    17 models registered. LITELLM_BASE_URL=http://172.20.1.52:4000/v1. Never print its master key.
+    Reachable from 133.
+  - LiteLLM external gateway (the one AgentOS uses): container on 133, :4000,
+    17 models registered. LITELLM_BASE_URL=http://172.30.0.133:4000/v1. Never print its master key.
     NOTE: do not confuse with litellm-personal (separate project, :4101) — that is a different LiteLLM
     instance used by other ismc projects, not this one.
 

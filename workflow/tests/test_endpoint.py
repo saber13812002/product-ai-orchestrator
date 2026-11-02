@@ -20,10 +20,10 @@ from workflow import config
 
 def test_external_mode_resolves_from_external_env(monkeypatch):
     """Mode A: LITELLM_BASE_URL + LITELLM_API_KEY are used verbatim."""
-    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.20.1.52:4000/v1")
+    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.30.0.133:4000/v1")
     monkeypatch.setenv("LITELLM_API_KEY", "ext-key")
     base_url, api_key = config.resolve_endpoint(mode="external")
-    assert base_url == "http://172.20.1.52:4000/v1"
+    assert base_url == "http://172.30.0.133:4000/v1"
     assert api_key == "ext-key"
 
 
@@ -93,18 +93,18 @@ def test_endpoint_warning_for_non_v1_url(monkeypatch):
     class of silent 404s) but does NOT raise."""
     import warnings
     monkeypatch.delenv("LITELLM_API_KEY", raising=False)
-    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.20.1.52:4000")
+    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.30.0.133:4000")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         base_url, _ = config.resolve_endpoint(mode="external")
-    assert base_url == "http://172.20.1.52:4000"
+    assert base_url == "http://172.30.0.133:4000"
     assert any("/v1" in str(w.message) for w in caught)
 
 
 def test_no_trailing_slash_still_warns(monkeypatch):
     """A bare gateway URL with a trailing slash but no /v1 also warns."""
     import warnings
-    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.20.1.52:4000/")
+    monkeypatch.setenv("LITELLM_BASE_URL", "http://172.30.0.133:4000/")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         config.resolve_endpoint(mode="external")

@@ -15,8 +15,8 @@ resolved in one place — `workflow/config.py::resolve_endpoint()`. See [LITELLM
 ## Repo identity
 
 - **Remote:** `https://git.ai.ismc.ir/common/website/ai-product-orchestrator` (internal GitLab CE on
-  server 52, port 81; git over `http://172.20.1.52:81/...`). Private.
-- **Deploy target (server 52):** `/home/saber/saberprojects/ai-product-orchestrator` — a
+  server 133, port 81; git over `http://172.30.0.133:81/...`). Private. *(was server 52, migrated 2026-11-02)*
+- **Deploy target (server 133):** `/home/saber/saberprojects/ai-product-orchestrator` — a
   **second** live instance, container `agno-agentos-repo`, port **7779**. The original
   production instance `agno-agentos` (port **7777**) lives at `/home/saber/agentos/` and is
   **not managed by this repo** — never touch it.
@@ -56,7 +56,7 @@ docker compose exec agno-agentos uv run python -m workflow.run endpoint   # whic
 ## Hard rules (do not break these)
 
 1. **No secrets in the repo.** `.env` is gitignored; only `.env.example` is tracked. The LiteLLM
-   master key is a live credential — it exists only in `.env` files on server 52
+   master key is a live credential — it exists only in `.env` files on server 133
    (`/home/saber/agentos/.env`, and the deploy target's `.env`). Never print or commit it.
 2. **CI is hermetic by design.** `workflow/tests/` use a `FakeRouter`. Never make a test need
    network/LLM/keys, or the CI promise ("no LLM, no API key, no cost") is broken.
@@ -73,7 +73,7 @@ docker compose exec agno-agentos uv run python -m workflow.run endpoint   # whic
    imperative subjects, MR → CI green → merge to `main`. Releases: annotated `vX.Y.Z` tags
    (`docs/RELEASES.md`).
 
-## CI/CD (GitLab, self-hosted on server 52)
+## CI/CD (GitLab, self-hosted on server 133)
 
 - **The project is served by the healthy root runner** **`AI-TOOLS`** (runner #1) — root systemd
   service `gitlab-runner`, config `/etc/gitlab-runner/config.toml`. All `server52` jobs run on it.
@@ -88,9 +88,9 @@ docker compose exec agno-agentos uv run python -m workflow.run endpoint   # whic
   container (`scripts/ci-docker.sh`), which runs `scripts/ci.sh` on a **container-local copy**
   of the source (container runs as root; never let it write into the checkout).
 - **CRITICAL GOTCHA — `clone_url`:** GitLab's `external_url` is the public
-  `https://git.ai.ismc.ir` (port 443), which **server 52 itself cannot reach** (it resolves to
+  `https://git.ai.ismc.ir` (port 443), which **server 133 itself cannot reach** (it resolves to
   a public IP). Every runner on 52 therefore carries
-  `clone_url = "http://172.20.1.52:81"` in its `[[runners]]` block, else the job dies in
+  `clone_url = "http://172.30.0.133:81"` in its `[[runners]]` block, else the job dies in
   `Getting source` with `Failed to connect to git.ai.ismc.ir port 443`. (Fixed on all runners
   2026-10-08; first green pipeline `#81` verified that day. If a job fails with the port-443
   error again, a new runner was likely registered without `clone_url`.)

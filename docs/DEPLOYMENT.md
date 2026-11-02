@@ -23,7 +23,7 @@ details, configuration, and troubleshooting are in **[LITELLM.md](LITELLM.md)**.
   `depends_on … required: false`). Check with `docker compose version`.
 - **Model access.** Either:
   - **Scenario 1 (external):** network access to a LiteLLM gateway you already run
-    (`LITELLM_BASE_URL`, e.g. `http://172.20.1.52:4000/v1`).
+    (`LITELLM_BASE_URL`, e.g. `http://172.30.0.133:4000/v1`).
   - **Scenario 2 (bundled):** the sidecar the repo starts needs network access to your model
     backends (vLLM / SGLang / OpenAI-compatible servers).
 - **Git** (for the recommended clone-based install) — or just the repository files.
@@ -56,7 +56,7 @@ Edit `.env` (do **not** commit it — it's gitignored). Pick the block for your 
 ```ini
 # LITELLM_MODE=external            # (default — you can leave this unset)
 # Required — your LiteLLM gateway
-LITELLM_BASE_URL=http://172.20.1.52:4000/v1
+LITELLM_BASE_URL=http://172.30.0.133:4000/v1
 LITELLM_API_KEY=<your-litellm-master-or-virtual-key>
 
 # Model names as served by your gateway (defaults shown are the reference Qwen fleet)

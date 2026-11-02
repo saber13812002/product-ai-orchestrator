@@ -237,7 +237,7 @@ Point at your gateway and models in `.env` (Mode A shown; Mode B in
 ```ini
 # Mode A — external gateway (default)
 LITELLM_MODE=external
-LITELLM_BASE_URL=http://172.20.1.52:4000/v1
+LITELLM_BASE_URL=http://172.30.0.133:4000/v1
 LITELLM_API_KEY=<your-key>
 AGENT_MODEL_FAST=qwen38-nothinking
 AGENT_MODEL_DEEP=qwen38

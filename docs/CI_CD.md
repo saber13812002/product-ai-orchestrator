@@ -14,7 +14,7 @@ no network to LiteLLM.
 | `deploy` | `deploy` | `scripts/deploy-repo.sh` → sync + `docker compose up -d --build` + **health-wait on 7779** | 🟡 Build + Deploy + a **health-wait** (process-alive). **No post-deploy smoke run.** |
 
 - **Hermetic — ✅ the core promise holds.** CI needs no LLM, no LiteLLM, no API key, no cost.
-- **`clone_url` gotcha** — every runner on 52 must carry `clone_url = "http://172.20.1.52:81"`
+- **`clone_url` gotcha** — every runner on 52 must carry `clone_url = "http://172.30.0.133:81"`
   (public `git.ai.ismc.ir:443` is unreachable from 52). See `AGENTS.md`.
 - **Serving runner** — the healthy **root runner `AI-TOOLS` (#1)**; the broken user-mode runner
   #5 is stopped + deactivated. See `AGENTS.md` and the STEP 9.5 report.

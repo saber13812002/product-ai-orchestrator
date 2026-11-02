@@ -15,7 +15,7 @@ variables the application actually reads:
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `LITELLM_MODE` | ⬜ | `external` | `external` (use your own gateway) or `bundled` (use the sidecar this repo starts). |
-| `LITELLM_BASE_URL` | ✅ (external) | *(empty)* | Base URL of your LiteLLM gateway, e.g. `http://172.20.1.52:4000/v1`. |
+| `LITELLM_BASE_URL` | ✅ (external) | *(empty)* | Base URL of your LiteLLM gateway, e.g. `http://172.30.0.133:4000/v1`. |
 | `LITELLM_API_KEY` | ✅ (external) | *(empty)* | The LiteLLM master / virtual key. **Never commit it.** |
 | `LITELLM_MASTER_KEY` | ✅ (bundled) | *(empty)* | The sidecar's master key. AgentOS authenticates to the sidecar with this same value. **Generate one; never commit it.** |
 
