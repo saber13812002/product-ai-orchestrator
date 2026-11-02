@@ -4,18 +4,73 @@
 > single-page snapshot of the current state: what the project is, where it lives, what
 > version it is, what's done (STEPS 1–9), what's open, and what STEP 10 is.
 
-_Last updated: **2026-10-21 (re-audit, live re-verification — state unchanged since 2026-10-20)** ·
-Latest release: **v0.3.0** · `main` = `299f1a3` (synced, clean) · Test suite: **30 tests**
-(hermetic, **re-run green in-container during the 2026-10-21 audit**, 0.83s) · Both instances
-healthy (7777 prod / 7779 deploy target), deploy target **byte-identical to `main`** (md5) ·
-1 real model call re-verified (19 tokens) · CI: last verified green at v0.3.0; **pipeline list
-still not queryable (no GitLab API token → TASK-CI-1)**; runner logged 502s at 06:52 UTC
-2026-10-21 around the gitlab stack's ~07:00 UTC restart — to check in TASK-CI-1 ·
-**Golden Rule (tests + observability) codified in STEP 9.6** ·
+_Last updated: **2026-11-02 (STEP 1 baseline finalization — see §0a; ⚠️ server 52 was DOWN at
+audit time, so all 52-side state is UNVERIFIED this round)** ·
+Previous: 2026-10-21 (re-audit, live re-verification — state unchanged since 2026-10-20) ·
+Latest release: **v0.3.0** · `main` = `299f1a3` (local; **remote HEAD unverified — 52 down**) ·
+Test suite: **30 tests** (hermetic) · **Golden Rule (tests + observability) codified in STEP 9.6** ·
 **Full verified audit: [PROJECT_STATUS.md](PROJECT_STATUS.md)** ·
 **2026-10-21 audit bundle (4 reports): [../audit_2026_10_21/](../audit_2026_10_21/)** ·
 **Work order: [ROADMAP.md](ROADMAP.md)** · **Test map: [TEST_MATRIX.md](TEST_MATRIX.md)** ·
 **Living test/observability checklist: [PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md](PROJECT_TEST_AND_OBSERVABILITY_CHECKLIST.md)**._
+
+### 0a. 2026-11-02 — STEP 1: project baseline finalization (decision history / done / remaining)
+
+This section is the authoritative record for the "prepare to start Observability (STEP 2) + first
+real product Workflow run" baseline pass. **Per the Golden Rule, every claim below was re-verified
+from the real Git and server state — nothing was assumed unchanged** (and that check surfaced two
+material changes: the local repo moved, and server 52 went down).
+
+**Decision history (who decided what, and why):**
+
+| Date | Decision | Rationale / authority |
+|---|---|---|
+| 2026-10-20 | Audit first; no code changes; 4 report files | User audit prompt; Golden Rule |
+| 2026-10-21 | Commit the re-audit bundle on a **separate `docs/` branch** + create **MR !1** (not a direct main commit) | User: "independent docs branch … no merge/deploy this stage"; MR keeps main clean |
+| 2026-10-21 | Do **not** merge MR !1 without explicit user approval | User: "بدون تأیید صریح من Merge نکن" |
+| 2026-11-02 | Baseline finalization must verify **real** Git + server state, not assume it | User STEP 1: "فرض نکن هنوز تغییر نکرده‌اند" |
+| 2026-11-02 | **No merge, no direct main commit, no Production change, 7777/7779 untouched, no expensive LLM test** | User STEP 1 hard constraints (still in force) |
+| 2026-11-02 | **Block STEP 2 (Observability) on user restoring server 52** | 52 is down → cannot push, merge, run full CI, or verify deploy; doing STEP 2 blind violates Golden Rule |
+
+**What was DONE and verified this session (2026-11-02) — with evidence:**
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| 1 | Local repo location | `find` + `git` | **MOVED** from `server52and53/ai-product-orchestrator` to **`rag/rag-support/ai-product-orchestrator`** (old path gone). All work now done from the new path. |
+| 2 | Local `main` | `git rev-parse main` | `299f1a3` (matches 2026-10-21 record) |
+| 3 | Local docs branch | `git rev-parse docs/audit-baseline-2026-10-21` | `44d3223` (1 commit ahead of main) |
+| 4 | Working tree | `git status --short` | clean |
+| 5 | Remote GitLab (52:81) | `git fetch`, `/dev/tcp` probe | **UNREACHABLE** — 52 down (see #8). Local `origin/*` refs are the **stale local mirror**, not live remote state. |
+| 6 | MR !1 / pipeline / GitLab API | gitlab-rails (needs 52) | **UNVERIFIED — 52 down.** MR !1 was last known open + pipeline 202 green on 2026-10-21. |
+| 7 | Secret scan + `git diff --check` (docs branch) | `grep` over the 4 reports/README/AI_HANDOFF + `git diff main..docs` | **0 secrets**; `git diff --check` **clean** (exit 0); diff is **purely additive** (587 + / 9 −) |
+| 8 | Hermetic tests (local) | `pytest` on the agno-free modules (`test_state`, `test_endpoint`) | **15 passed in 0.37s.** The other 6 modules import `agno`, which **cannot install on this laptop** (32-bit Python 3.14 → no wheels for `pyyaml`/`greenlet`, needs MSVC). **Full 30/30 therefore re-runs only in the 52 container (down) or in CI.** |
+| 9 | Doc cross-links (docs branch) | `grep` over README/AGENTS/AI_HANDOFF | **All 4 audit reports + Roadmap + Test Matrix + living checklist linked** from README, AI_HANDOFF, and (as §9 refs) — consistent. |
+| 10 | CI deploy blast-radius | read `.gitlab-ci.yml` | `deploy` runs **only** on `main` / a tag / manual web trigger — **never from an MR or the docs branch**. So **merging MR !1 will rebuild+restart 7779**; an MR pipeline only runs the `test` stage. |
+
+**Server 52 status (the blocker):** at 2026-11-02 ~13:26–13:35 UTC, **52 (172.20.1.52) is
+completely unreachable** — SSH :22 and Git :81 both time out from the laptop, **and** from 53
+(which is itself up: `ssh jump53` OK). 53 also reports **no route to 52** on :22/:81/:4000/:7777/
+:7779/:9090. This is a network/host outage on 52, not a laptop problem. **Consequently, none of
+this could be verified today:** live remote `HEAD`, MR !1 existence/state, pipeline status,
+7777/7779 health, the deploy target, or the md5 sync-vs-main check. **Everything 52-side is
+marked UNVERIFIED, not assumed green.**
+
+**Remaining work (in order, to reach "ready for STEP 2 + first Workflow run"):**
+
+1. **Restore server 52 reachability** (user infra — power/network). Re-run: `git fetch`, MR !1 +
+   pipeline check (gitlab-rails), 7777/7779 `docker ps` + `/health`, deploy-target md5 vs main,
+   and the **full 30-test in-container** hermetic run.
+2. **User merges MR !1** (docs baseline → main). *Note #10: this triggers a 7779 rebuild — confirm
+   52 is stable + user accepts the 7779 restart before merging.*
+3. **`feat/observability-baseline`** (STEP 2 / ROADMAP TASK-9.7-1…3): `workflow/observability.py`
+   (trace_id + structured logging + duration_ms), independent Prometheus `/metrics` (separate path
+   from Agno's JSON one), dependency-aware `/ready`, all hermetic-tested. Separate MR; no merge
+   without approval.
+4. **TASK-11-1** — one bounded, isolated (never 7777/7779) live refine run with before/after
+   evidence; **needs its own budget approval** (~210k-token cap).
+5. **TASK-9.7-4** — Prometheus job + Grafana dashboard on 52 (reuses the existing 52 stack).
+6. Open user decisions unchanged: model/threshold (85/80 gates) and Helm/K8s + registry (TASK-11-2,
+   TASK-10-1).
 
 ### 0. 2026-10-21 re-audit (what changed / what didn't)
 
